@@ -241,8 +241,32 @@ class QuarkArch(Architecture):
     link_reg = 'lr'
 
     def get_instruction_info(self, data: bytes, addr: int) -> Optional[InstructionInfo]:
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        op = QuarkOpcode(info.op)
+
         result = InstructionInfo()
         result.length = 4
+
+        match op:
+            case QuarkOpcode.jmp:
+                if info.cond & 8:
+                    if info.cond & 1:
+                        result.add_branch(BranchType.TrueBranch, addr + 4 + i32(info.imm22 << 2))
+                        result.add_branch(BranchType.FalseBranch, addr + 4)
+                    else:
+                        result.add_branch(BranchType.TrueBranch, addr + 4)
+                        result.add_branch(BranchType.FalseBranch, addr + 4 + i32(info.imm22 << 2))
+                else:
+                    result.add_branch(BranchType.UnconditionalBranch, addr + 4 + i32(info.imm22 << 2))
+            case QuarkOpcode.call:
+                result.add_branch(BranchType.CallDestination, addr + 4 + i32(info.imm22 << 2))
+            case QuarkOpcode.integer_group:
+                int_op = QuarkIntegerOpcode(info.b)
+                match int_op:
+                    case QuarkIntegerOpcode.mov:
+                        if info.a == self.get_reg_index('ip'):
+                            result.add_branch(BranchType.IndirectBranch)
+
         return result
 
     def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
@@ -250,10 +274,264 @@ class QuarkArch(Architecture):
         op = QuarkOpcode(info.op)
 
         tokens = []
+
+        if info.cond & 8:
+            if info.cond & 1:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.TextToken, "if"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.cond >> 1) & 3}"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                ])
+            else:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.TextToken, "if"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.OperationToken, "!"),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.cond >> 1) & 3}"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                ])
+        elif info.cond & 1:
+            tokens.extend([
+                InstructionTextToken(InstructionTextTokenType.TextToken, "skip"),
+                InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+            ])
+
+        def cval_tokens(plus: bool, zero: bool):
+            if info.largeimm:
+                if info.imm11 == 0:
+                    if not zero:
+                        return []
+                    else:
+                        if plus:
+                            return [
+                                InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                                InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
+                            ]
+                        else:
+                            return [
+                                InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
+                            ]
+                elif info.imm11i > 0:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                        ]
+                else:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"-"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{-info.imm11i:#x}", value=-info.imm11i),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                        ]
+            elif info.smallimm:
+                cval = rol(info.imm5, info.d)
+                if cval == 0:
+                    if not zero:
+                        return []
+                    else:
+                        if plus:
+                            return [
+                                InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                                InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
+                            ]
+                        else:
+                            return [
+                                InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
+                            ]
+                elif cval > 0:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{cval:#x}", value=cval),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{cval:#x}", value=cval),
+                        ]
+                else:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"-"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{-cval:#x}", value=-cval),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{cval:#x}", value=cval),
+                        ]
+            else:
+                if info.d == 0:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                        ]
+                else:
+                    if plus:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"*"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{2**info.d}", value=2**info.d),
+                        ]
+                    else:
+                        return [
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.OperationToken, f"*"),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{2**info.d}", value=2**info.d),
+                        ]
+
         match op:
+            case QuarkOpcode.ldb | QuarkOpcode.ldh | QuarkOpcode.ldw | QuarkOpcode.ldbu | QuarkOpcode.ldhu | QuarkOpcode.ldwu | QuarkOpcode.ldsxb | QuarkOpcode.ldsxh | QuarkOpcode.ldsxbu | QuarkOpcode.ldsxhu:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
+                ])
+            case QuarkOpcode.ldmw | QuarkOpcode.ldmwu:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, ".."),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(30)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
+                ])
+            case QuarkOpcode.ldi:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm17:#x}", value=info.imm17),
+                ])
+            case QuarkOpcode.ldih:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.immhi:#x}", value=info.immhi),
+                ])
+            case QuarkOpcode.stb | QuarkOpcode.sth | QuarkOpcode.stw | QuarkOpcode.stbu | QuarkOpcode.sthu | QuarkOpcode.stwu:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                ])
+            case QuarkOpcode.stmw | QuarkOpcode.stmwu:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, ".."),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(30)),
+                ])
+            case QuarkOpcode.jmp | QuarkOpcode.call:
+                dest = addr + 4 + i32(info.imm22 << 2)
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.PossibleAddressToken, f"{dest:#x}", value=dest),
+                ])
+            case QuarkOpcode.add | QuarkOpcode.sub | QuarkOpcode.mul | QuarkOpcode.div | QuarkOpcode.idiv | QuarkOpcode.mod | QuarkOpcode.imod | QuarkOpcode.xor | QuarkOpcode.sar | QuarkOpcode.shl | QuarkOpcode.shr | QuarkOpcode.rol | QuarkOpcode.ror:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True),
+                ])
+            case QuarkOpcode.and_:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, "and"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True),
+                ])
+            case QuarkOpcode.or_:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, "or"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True),
+                ])
+            case QuarkOpcode.addx | QuarkOpcode.subx:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, 'cc3'),
+                ])
+            case QuarkOpcode.mulx, QuarkOpcode.imulx:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.d)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ":"),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                ])
+            case QuarkOpcode.syscall:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm22}", value=info.imm22),
+                ])
             case QuarkOpcode.integer_group:
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
+                    case QuarkIntegerOpcode.mov:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            *cval_tokens(plus=False, zero=False),
+                        ])
                     case _:
                         tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name)])
             case QuarkOpcode.cmp | QuarkOpcode.icmp:
