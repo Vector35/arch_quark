@@ -2,7 +2,7 @@ import enum
 from typing import Optional, Tuple, List
 
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
-    InstructionTextTokenType, BinaryViewType, Endianness, BranchType
+    InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil
 
 
 def rol(i, n):
@@ -94,14 +94,14 @@ class QuarkIntegerOpcode(enum.IntEnum):
 
 
 class QuarkCompareOpcode(enum.IntEnum):
-    less = 0
-    less_equal = 1
-    greater_equal = 2
-    greater = 3
-    equal = 4
-    not_equal = 5
-    bit_test_nonzero = 6
-    bit_test_zero = 7
+    lt = 0
+    le = 1
+    ge = 2
+    gt = 3
+    eq = 4
+    ne = 5
+    nz = 6
+    z = 7
 
 
 class QuarkInstruction:
@@ -260,12 +260,18 @@ class QuarkArch(Architecture):
                     result.add_branch(BranchType.UnconditionalBranch, addr + 4 + i32(info.imm22 << 2))
             case QuarkOpcode.call:
                 result.add_branch(BranchType.CallDestination, addr + 4 + i32(info.imm22 << 2))
+            case QuarkOpcode.syscall:
+                result.add_branch(BranchType.SystemCall)
             case QuarkOpcode.integer_group:
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
                     case QuarkIntegerOpcode.mov:
                         if info.a == self.get_reg_index('ip'):
                             result.add_branch(BranchType.IndirectBranch)
+                    case QuarkIntegerOpcode.call:
+                        result.add_branch(BranchType.CallDestination)
+                    case QuarkIntegerOpcode.syscall:
+                        result.add_branch(BranchType.SystemCall)
 
         return result
 
@@ -532,17 +538,71 @@ class QuarkArch(Architecture):
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                             *cval_tokens(plus=False, zero=False),
                         ])
+                    case QuarkIntegerOpcode.xchg | QuarkIntegerOpcode.sxb | QuarkIntegerOpcode.sxh | QuarkIntegerOpcode.swaph | QuarkIntegerOpcode.swapw | QuarkIntegerOpcode.neg | QuarkIntegerOpcode.not_ | QuarkIntegerOpcode.zxb | QuarkIntegerOpcode.zxh:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                        ])
+                    case QuarkIntegerOpcode.call:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                        ])
+                    case QuarkIntegerOpcode.ldcr | QuarkIntegerOpcode.stcr:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                        ])
+                    case QuarkIntegerOpcode.setcc | QuarkIntegerOpcode.clrcc:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.a & 3)}"),
+                        ])
+                    case QuarkIntegerOpcode.notcc | QuarkIntegerOpcode.movcc:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.a & 3)}"),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.c & 3)}"),
+                        ])
+                    case QuarkIntegerOpcode.andcc | QuarkIntegerOpcode.orcc | QuarkIntegerOpcode.xorcc:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.a & 3)}"),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.c & 3)}"),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.d & 3)}"),
+                        ])
                     case _:
-                        tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name)])
+                        tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, "??")])
             case QuarkOpcode.cmp | QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
-                match cmp_op:
-                    case _:
-                        tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, cmp_op.name)])
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, f"{op.name}.{cmp_op.name}"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{info.b >> 3}"),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True),
+                ])
             case _:
-                tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name)])
+                tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, "??")])
 
         return tokens, 4
+
+    def get_instruction_low_level_il(self, data: bytes, addr: int, il: lowlevelil.LowLevelILFunction) -> Optional[int]:
+        il.append(il.unimplemented())
+        return 4
 
 
 QuarkArch.register()
