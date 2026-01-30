@@ -2,7 +2,10 @@ import enum
 from typing import Optional, Tuple, List
 
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
-    InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil
+    InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil, \
+    LowLevelILLabel, LowLevelILFunction, LLIL_TEMP, FlagRole, LowLevelILOperation, \
+    FlagWriteTypeName, FlagType, ILRegisterType, ExpressionIndex, IntrinsicInfo, Type, \
+    IntrinsicInput
 
 
 def rol(i, n):
@@ -133,22 +136,10 @@ class QuarkInstruction:
         return self.instr & 31
 
     @property
-    def imm5i(self):
-        if self.instr & 0x10:
-            return -(self.instr & 0x1f)
-        return self.instr & 0x1f
-
-    @property
     def imm5(self):
         if self.instr & 0x10:
             return (self.instr & 0x1f) | 0xffffffe0
         return self.instr & 0x1f
-
-    @property
-    def imm11i(self):
-        if self.instr & 0x400:
-            return -(self.instr & 0x7ff)
-        return self.instr & 0x7ff
 
     @property
     def imm11(self):
@@ -157,22 +148,10 @@ class QuarkInstruction:
         return self.instr & 0x7ff
 
     @property
-    def imm17i(self):
-        if self.instr & 0x10000:
-            return -(self.instr & 0x1ffff)
-        return self.instr & 0x1ffff
-
-    @property
     def imm17(self):
         if self.instr & 0x10000:
             return (self.instr & 0x1ffff) | 0xfffe0000
         return self.instr & 0x1ffff
-
-    @property
-    def imm22i(self):
-        if self.instr & 0x200000:
-            return -(self.instr & 0x3fffff)
-        return self.instr & 0x3fffff
 
     @property
     def imm22(self):
@@ -231,18 +210,44 @@ class QuarkArch(Architecture):
         'r28': RegisterInfo('r28', 4),
         'r29': RegisterInfo('r29', 4),
         'lr': RegisterInfo('lr', 4),
-        'ip': RegisterInfo('ip', 4),
-        'cc0': RegisterInfo('cc0', 1),
-        'cc1': RegisterInfo('cc1', 1),
-        'cc2': RegisterInfo('cc2', 1),
-        'cc3': RegisterInfo('cc3', 1),
+        'syscall_num': RegisterInfo('syscall_num', 4),
+    }
+    flags = {
+        'cc0', 'cc1', 'cc2', 'cc3',
+    }
+    flag_roles = {
+        'cc0': FlagRole.SpecialFlagRole,
+        'cc1': FlagRole.SpecialFlagRole,
+        'cc2': FlagRole.SpecialFlagRole,
+        'cc3': FlagRole.SpecialFlagRole,
+    }
+    flag_write_types = {
+        'none', '*', '0', '1', '2', '3'
+    }
+    flags_written_by_flag_write_type = {
+        'none': {},
+        '*': ['cc0', 'cc1', 'cc2', 'cc3'],
+        '0': ['cc0'],
+        '1': ['cc1'],
+        '2': ['cc2'],
+        '3': ['cc3'],
     }
     stack_pointer = 'sp'
     link_reg = 'lr'
+    intrinsics = {
+        '__byteswaph': IntrinsicInfo([IntrinsicInput(Type.int(2), '')], [Type.int(2, False)]),
+        '__byteswapw': IntrinsicInfo([IntrinsicInput(Type.int(4), '')], [Type.int(4, False)]),
+    }
+
+    ip_reg_index = 31
 
     def get_instruction_info(self, data: bytes, addr: int) -> Optional[InstructionInfo]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
-        op = QuarkOpcode(info.op)
+        try:
+            op = QuarkOpcode(info.op)
+        except ValueError:
+            print(f"Invalid opcode {info.op:#x} at {addr:#x} {data}")
+            return None
 
         result = InstructionInfo()
         result.length = 4
@@ -266,7 +271,7 @@ class QuarkArch(Architecture):
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
                     case QuarkIntegerOpcode.mov:
-                        if info.a == self.get_reg_index('ip'):
+                        if info.a == self.ip_reg_index:
                             result.add_branch(BranchType.IndirectBranch)
                     case QuarkIntegerOpcode.call:
                         result.add_branch(BranchType.CallDestination)
@@ -303,7 +308,12 @@ class QuarkArch(Architecture):
                 InstructionTextToken(InstructionTextTokenType.TextToken, " "),
             ])
 
-        def cval_tokens(plus: bool, zero: bool):
+        def reg_name(reg):
+            if reg == self.ip_reg_index:
+                return "ip"
+            return self.get_reg_name(reg)
+
+        def cval_tokens(plus: bool, zero: bool, signed: bool):
             if info.largeimm:
                 if info.imm11 == 0:
                     if not zero:
@@ -318,25 +328,25 @@ class QuarkArch(Architecture):
                             return [
                                 InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
                             ]
-                elif info.imm11i > 0:
+                elif i32(info.imm11) > 0 or not signed:
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
-                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11:#x}", value=info.imm11),
                         ]
                     else:
                         return [
-                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11:#x}", value=info.imm11),
                         ]
                 else:
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"-"),
-                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{-info.imm11i:#x}", value=-info.imm11i),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{-i32(info.imm11):#x}", value=i32(info.imm11)),
                         ]
                     else:
                         return [
-                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm11i:#x}", value=info.imm11i),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{i32(info.imm11):#x}", value=i32(info.imm11)),
                         ]
             elif info.smallimm:
                 cval = rol(info.imm5, info.d)
@@ -353,7 +363,7 @@ class QuarkArch(Architecture):
                             return [
                                 InstructionTextToken(InstructionTextTokenType.IntegerToken, "0", value=0),
                             ]
-                elif cval > 0:
+                elif cval > 0 or not signed:
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
@@ -367,7 +377,7 @@ class QuarkArch(Architecture):
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"-"),
-                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{-cval:#x}", value=-cval),
+                            InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{i32(cval):#x}", value=-i32(cval)),
                         ]
                     else:
                         return [
@@ -378,23 +388,23 @@ class QuarkArch(Architecture):
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                         ]
                     else:
                         return [
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                         ]
                 else:
                     if plus:
                         return [
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"+"),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"*"),
                             InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{2**info.d}", value=2**info.d),
                         ]
                     else:
                         return [
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                             InstructionTextToken(InstructionTextTokenType.OperationToken, f"*"),
                             InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{2**info.d}", value=2**info.d),
                         ]
@@ -404,30 +414,30 @@ class QuarkArch(Architecture):
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
-                    *cval_tokens(plus=True, zero=False),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False, signed=True),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                 ])
             case QuarkOpcode.ldmw | QuarkOpcode.ldmwu:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.TextToken, ".."),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(30)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(30)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                 ])
             case QuarkOpcode.ldi:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.imm17:#x}", value=info.imm17),
                 ])
@@ -435,7 +445,7 @@ class QuarkArch(Architecture):
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{info.immhi:#x}", value=info.immhi),
                 ])
@@ -444,23 +454,23 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
-                    *cval_tokens(plus=True, zero=False),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False, signed=True),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                     InstructionTextToken(InstructionTextTokenType.TextToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                 ])
             case QuarkOpcode.stmw | QuarkOpcode.stmwu:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.TextToken, ".."),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(30)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(30)),
                 ])
             case QuarkOpcode.jmp | QuarkOpcode.call:
                 dest = addr + 4 + i32(info.imm22 << 2)
@@ -469,57 +479,67 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                     InstructionTextToken(InstructionTextTokenType.PossibleAddressToken, f"{dest:#x}", value=dest),
                 ])
-            case QuarkOpcode.add | QuarkOpcode.sub | QuarkOpcode.mul | QuarkOpcode.div | QuarkOpcode.idiv | QuarkOpcode.mod | QuarkOpcode.imod | QuarkOpcode.xor | QuarkOpcode.sar | QuarkOpcode.shl | QuarkOpcode.shr | QuarkOpcode.rol | QuarkOpcode.ror:
+            case QuarkOpcode.add | QuarkOpcode.sub | QuarkOpcode.mul | QuarkOpcode.div | QuarkOpcode.idiv | QuarkOpcode.mod | QuarkOpcode.imod:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    *cval_tokens(plus=False, zero=True),
+                    *cval_tokens(plus=False, zero=True, signed=True),
+                ])
+            case QuarkOpcode.xor | QuarkOpcode.sar | QuarkOpcode.shl | QuarkOpcode.shr | QuarkOpcode.rol | QuarkOpcode.ror:
+                tokens.extend([
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True, signed=False),
                 ])
             case QuarkOpcode.and_:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, "and"),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    *cval_tokens(plus=False, zero=True),
+                    *cval_tokens(plus=False, zero=True, signed=False),
                 ])
             case QuarkOpcode.or_:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, "or"),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    *cval_tokens(plus=False, zero=True),
+                    *cval_tokens(plus=False, zero=True, signed=False),
                 ])
             case QuarkOpcode.addx | QuarkOpcode.subx:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, 'cc3'),
                 ])
-            case QuarkOpcode.mulx, QuarkOpcode.imulx:
+            case QuarkOpcode.mulx | QuarkOpcode.imulx:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.d)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.d)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ":"),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.b)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                 ])
             case QuarkOpcode.syscall:
                 tokens.extend([
@@ -534,29 +554,35 @@ class QuarkArch(Architecture):
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
                             InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                            *cval_tokens(plus=False, zero=False),
+                            *cval_tokens(plus=False, zero=False, signed=True),
                         ])
                     case QuarkIntegerOpcode.xchg | QuarkIntegerOpcode.sxb | QuarkIntegerOpcode.sxh | QuarkIntegerOpcode.swaph | QuarkIntegerOpcode.swapw | QuarkIntegerOpcode.neg | QuarkIntegerOpcode.not_ | QuarkIntegerOpcode.zxb | QuarkIntegerOpcode.zxh:
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
                             InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.c)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                         ])
                     case QuarkIntegerOpcode.call:
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
                             InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
+                        ])
+                    case QuarkIntegerOpcode.syscall:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                         ])
                     case QuarkIntegerOpcode.ldcr | QuarkIntegerOpcode.stcr:
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
                             InstructionTextToken(InstructionTextTokenType.TextToken, " "),
-                            InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                         ])
                     case QuarkIntegerOpcode.setcc | QuarkIntegerOpcode.clrcc:
                         tokens.extend([
@@ -587,22 +613,354 @@ class QuarkArch(Architecture):
             case QuarkOpcode.cmp | QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 tokens.extend([
-                    InstructionTextToken(InstructionTextTokenType.InstructionToken, f"{op.name}.{cmp_op.name}"),
-                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.InstructionToken, f"{op.name}.{cmp_op.name}."),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{info.b >> 3}"),
+                    InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                    InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    InstructionTextToken(InstructionTextTokenType.RegisterToken, self.get_reg_name(info.a)),
-                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
-                    *cval_tokens(plus=False, zero=True),
+                    *cval_tokens(plus=False, zero=True, signed=True),
                 ])
             case _:
                 tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, "??")])
 
         return tokens, 4
 
-    def get_instruction_low_level_il(self, data: bytes, addr: int, il: lowlevelil.LowLevelILFunction) -> Optional[int]:
-        il.append(il.unimplemented())
+    def get_instruction_low_level_il(self, data: bytes, addr: int, il: LowLevelILFunction) -> Optional[int]:
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        op = QuarkOpcode(info.op)
+
+        def ra():
+            assert info.a != self.ip_reg_index, "Can't handle ip"
+            return il.arch.get_reg_name(info.a)
+
+        def rb():
+            assert info.b != self.ip_reg_index, "Can't handle ip"
+            return il.arch.get_reg_name(info.b)
+
+        def rc():
+            assert info.c != self.ip_reg_index, "Can't handle ip"
+            return il.arch.get_reg_name(info.c)
+
+        def rd():
+            assert info.d != self.ip_reg_index, "Can't handle ip"
+            return il.arch.get_reg_name(info.d)
+
+        def ra_expr():
+            if info.a == self.ip_reg_index:  # ip
+                return il.const(4, addr + 4)
+            return il.reg(4, il.arch.get_reg_name(info.a))
+
+        def rb_expr():
+            if info.b == self.ip_reg_index:  # ip
+                return il.const(4, addr + 4)
+            return il.reg(4, il.arch.get_reg_name(info.b))
+
+        def rc_expr():
+            if info.c == self.ip_reg_index:  # ip
+                return il.const(4, addr + 4)
+            return il.reg(4, il.arch.get_reg_name(info.c))
+
+        def rd_expr():
+            if info.d == self.ip_reg_index:  # ip
+                return il.const(4, addr + 4)
+            return il.reg(4, il.arch.get_reg_name(info.d))
+
+        def cval():
+            if info.largeimm:
+                return il.const(4, info.imm11)
+            elif info.smallimm:
+                return il.const(4, rol(info.imm5, info.d))
+            else:
+                if info.d == 0:
+                    return rc_expr()
+                il.append(il.set_reg(4, LLIL_TEMP(0), il.shift_left(4, rc_expr(), il.const(4, info.d))))
+                return il.reg(4, LLIL_TEMP(0))
+
+        after = None
+        if info.cond & 8:
+            # Conditionally executed
+            # TODO: Can we combine with the jmp instruction for jmpcc or equivalent
+            # TODO: This should use flags
+            before = LowLevelILLabel()
+            after = LowLevelILLabel()
+            il.append(
+                il.if_expr(
+                    il.compare_equal(
+                        0,
+                        il.flag(f"cc{(info.cond >> 1) & 3}"),
+                        il.const(0, info.cond & 1)
+                    ),
+                    before,
+                    after
+                )
+            )
+            il.mark_label(before)
+        elif info.cond & 1:
+            # Always skipped apparently
+            il.append(il.nop())
+            return 4
+
+        match op:
+            case QuarkOpcode.ldb:
+                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
+            case QuarkOpcode.ldh:
+                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
+            case QuarkOpcode.ldw:
+                il.append(il.set_reg(4, ra(), il.load(4, il.add(4, rb_expr(), cval()))))
+            case QuarkOpcode.ldbu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(1, il.reg(4, addr)))))
+            case QuarkOpcode.ldhu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 2))))
+                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(2, il.reg(4, addr)))))
+            case QuarkOpcode.ldwu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 4))))
+                il.append(il.set_reg(4, ra(), il.load(4, il.reg(4, addr))))
+            case QuarkOpcode.ldmw:
+                addr = LLIL_TEMP(1)
+                # (= addr (+ rb + cval))
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                for i in range(info.a, 31):
+                    # (= temp2 (+ addr [(i-a) * 4])
+                    il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
+                    # (= (reg i) (load (temp2))
+                    il.append(il.set_reg(4, il.arch.get_reg_name(i), il.load(4, il.reg(4, LLIL_TEMP(2)))))
+            case QuarkOpcode.ldmwu:
+                addr = LLIL_TEMP(1)
+                # (= addr (+ rb + cval))
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                # (= rb (+ addr [(31 - a) * 4]))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, (31 - info.a) * 4))))
+                for i in range(info.a, 31):
+                    # (= temp2 (+ addr [(i-a) * 4])
+                    il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
+                    # (= (reg i) (load (temp2))
+                    il.append(il.set_reg(4, il.arch.get_reg_name(i), il.load(4, il.reg(4, LLIL_TEMP(2)))))
+            case QuarkOpcode.ldsxb:
+                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
+            case QuarkOpcode.ldsxh:
+                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
+            case QuarkOpcode.ldsxbu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(1, il.reg(4, addr)))))
+            case QuarkOpcode.ldsxhu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(2, il.reg(4, addr)))))
+            case QuarkOpcode.ldi:
+                il.append(il.set_reg(4, ra(), il.const(4, info.imm17)))
+            case QuarkOpcode.ldih:
+                il.append(il.set_reg(4, ra(), il.or_expr(4, ra_expr(), il.const(4, info.immhi))))
+            case QuarkOpcode.stb:
+                il.append(il.store(1, il.add(4, rb_expr(), cval()), il.low_part(1, ra_expr())))
+            case QuarkOpcode.sth:
+                il.append(il.store(2, il.add(4, rb_expr(), cval()), il.low_part(2, ra_expr())))
+            case QuarkOpcode.stw:
+                il.append(il.store(4, il.add(4, rb_expr(), cval()), ra_expr()))
+            case QuarkOpcode.stbu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.store(1, il.reg(4, addr), il.low_part(1, ra_expr())))
+            case QuarkOpcode.sthu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.store(2, il.reg(4, addr), il.low_part(2, ra_expr())))
+            case QuarkOpcode.stwu:
+                addr = LLIL_TEMP(1)
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.store(4, il.reg(4, addr), ra_expr()))
+            case QuarkOpcode.stmw:
+                addr = LLIL_TEMP(1)
+                # (= addr (+ rb + cval))
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                for i in range(info.a, 31):
+                    # (= temp2 (+ addr [(i-a) * 4])
+                    il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
+                    # (store temp2 (reg i))
+                    il.append(il.store(4, il.reg(4, LLIL_TEMP(2)), il.reg(4, il.arch.get_reg_name(i))))
+            case QuarkOpcode.stmwu:
+                addr = LLIL_TEMP(1)
+                # (= addr (+ rb + cval))
+                il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                for i in range(info.a, 31):
+                    # (= temp2 (+ addr [(i-a) * 4])
+                    il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
+                    # (store temp2 (reg i))
+                    il.append(il.store(4, il.reg(4, LLIL_TEMP(2)), il.reg(4, il.arch.get_reg_name(i))))
+                # (= rb addr)
+                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
+            case QuarkOpcode.jmp:
+                il.append(il.jump(il.const(4, addr + 4 + (info.imm22 << 2))))
+            case QuarkOpcode.call:
+                il.append(il.set_reg(4, 'lr', il.const(4, addr + 4)))
+                il.append(il.call(il.const(4, addr + 4 + (info.imm22 << 2))))
+            case QuarkOpcode.add:
+                il.append(il.set_reg(4, ra(), il.add(4, rb_expr(), cval())))
+            case QuarkOpcode.sub:
+                il.append(il.set_reg(4, ra(), il.sub(4, rb_expr(), cval())))
+            case QuarkOpcode.addx:
+                il.append(il.set_reg(4, ra(), il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='3')))
+            case QuarkOpcode.subx:
+                il.append(il.set_reg(4, ra(), il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='3')))
+            case QuarkOpcode.mulx:
+                il.append(il.set_reg_split(4, rd(), ra(), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
+            case QuarkOpcode.imulx:
+                il.append(il.set_reg_split(4, rd(), ra(), il.mult_double_prec_signed(4, rb_expr(), rc_expr())))
+            case QuarkOpcode.mul:
+                il.append(il.set_reg(4, ra(), il.mult(4, rb_expr(), cval())))
+            case QuarkOpcode.div:
+                il.append(il.set_reg(4, ra(), il.div_unsigned(4, rb_expr(), cval())))
+            case QuarkOpcode.idiv:
+                il.append(il.set_reg(4, ra(), il.div_signed(4, rb_expr(), cval())))
+            case QuarkOpcode.mod:
+                il.append(il.set_reg(4, ra(), il.mod_unsigned(4, rb_expr(), cval())))
+            case QuarkOpcode.imod:
+                il.append(il.set_reg(4, ra(), il.mod_signed(4, rb_expr(), cval())))
+            case QuarkOpcode.and_:
+                il.append(il.set_reg(4, ra(), il.and_expr(4, rb_expr(), cval())))
+            case QuarkOpcode.or_:
+                il.append(il.set_reg(4, ra(), il.or_expr(4, rb_expr(), cval())))
+            case QuarkOpcode.xor:
+                il.append(il.set_reg(4, ra(), il.xor_expr(4, rb_expr(), cval())))
+            case QuarkOpcode.sar:
+                il.append(il.set_reg(4, ra(), il.arith_shift_right(4, rb_expr(), cval())))
+            case QuarkOpcode.shl:
+                il.append(il.set_reg(4, ra(), il.shift_left(4, rb_expr(), cval())))
+            case QuarkOpcode.shr:
+                il.append(il.set_reg(4, ra(), il.logical_shift_right(4, rb_expr(), cval())))
+            case QuarkOpcode.rol:
+                il.append(il.set_reg(4, ra(), il.rotate_left(4, rb_expr(), cval())))
+            case QuarkOpcode.ror:
+                il.append(il.set_reg(4, ra(), il.rotate_right(4, rb_expr(), cval())))
+            case QuarkOpcode.syscall:
+                il.append(il.set_reg(4, 'syscall_num', il.const(4, info.imm22)))
+                il.append(il.system_call())
+            case QuarkOpcode.integer_group:
+                int_op = QuarkIntegerOpcode(info.b)
+                match int_op:
+                    case QuarkIntegerOpcode.mov:
+                        if info.a == 31:
+                            il.append(il.jump(cval()))
+                        else:
+                            il.append(il.set_reg(4, ra(), cval()))
+                    case QuarkIntegerOpcode.xchg:
+                        result = LLIL_TEMP(1)
+                        il.append(il.set_reg(4, result, ra_expr()))
+                        il.append(il.set_reg(4, ra(), rc_expr()))
+                        il.append(il.set_reg(4, rc(), il.reg(4, result)))
+                    case QuarkIntegerOpcode.sxb:
+                        il.append(il.set_reg(4, ra(), il.sign_extend(4, il.low_part(1, rc_expr()))))
+                    case QuarkIntegerOpcode.sxh:
+                        il.append(il.set_reg(4, ra(), il.sign_extend(4, il.low_part(2, rc_expr()))))
+                    case QuarkIntegerOpcode.swaph:
+                        il.append(il.intrinsic([ra()], '__byteswaph', [il.low_part(2, rc_expr())]))
+                    case QuarkIntegerOpcode.swapw:
+                        il.append(il.intrinsic([ra()], '__byteswapw', [rc_expr()]))
+                    case QuarkIntegerOpcode.call:
+                        addr = LLIL_TEMP(1)
+                        il.append(il.set_reg(4, addr, ra_expr()))
+                        il.append(il.set_reg(4, 'lr', il.const(4, addr + 4)))
+                        il.append(il.call(il.reg(4, addr)))
+                    case QuarkIntegerOpcode.neg:
+                        il.append(il.set_reg(4, ra(), il.neg_expr(4, rc_expr())))
+                    case QuarkIntegerOpcode.not_:
+                        il.append(il.set_reg(4, ra(), il.not_expr(4, rc_expr())))
+                    case QuarkIntegerOpcode.zxb:
+                        il.append(il.set_reg(4, ra(), il.zero_extend(4, il.low_part(1, rc_expr()))))
+                    case QuarkIntegerOpcode.zxh:
+                        il.append(il.set_reg(4, ra(), il.zero_extend(4, il.low_part(2, rc_expr()))))
+                    case QuarkIntegerOpcode.ldcr:
+                        cc0 = il.flag_bit(4, 'cc0', 0)
+                        cc1 = il.flag_bit(4, 'cc1', 8)
+                        cc2 = il.flag_bit(4, 'cc2', 16)
+                        cc3 = il.flag_bit(4, 'cc3', 24)
+                        il.append(il.set_reg(4, ra(), il.or_expr(4, cc3, il.or_expr(4, cc2, il.or_expr(4, cc1, cc0)))))
+                    case QuarkIntegerOpcode.stcr:
+                        il.append(il.set_reg(1, LLIL_TEMP(0), ra_expr()))
+                        il.append(il.set_flag('cc0', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x1))))
+                        il.append(il.set_flag('cc1', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x100))))
+                        il.append(il.set_flag('cc2', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x10000))))
+                        il.append(il.set_flag('cc3', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x1000000))))
+                    case QuarkIntegerOpcode.syscall:
+                        il.append(il.set_reg(4, 'syscall_num', ra_expr()))
+                        il.append(il.system_call())
+                    case QuarkIntegerOpcode.setcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.const(0, 1)))
+                    case QuarkIntegerOpcode.clrcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.const(0, 0)))
+                    case QuarkIntegerOpcode.notcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.not_expr(0, il.flag(f"cc{info.c & 3}"))))
+                    case QuarkIntegerOpcode.movcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.flag(f"cc{info.c & 3}")))
+                    case QuarkIntegerOpcode.andcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.and_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
+                    case QuarkIntegerOpcode.orcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.or_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
+                    case QuarkIntegerOpcode.xorcc:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.xor_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
+                    case _:
+                        il.append(il.unimplemented())
+            case QuarkOpcode.cmp:
+                cmp_op = QuarkCompareOpcode(info.b & 7)
+                match cmp_op:
+                    case QuarkCompareOpcode.lt:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_less_than(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.le:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_less_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.ge:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_greater_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.gt:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_greater_than(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.eq:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.ne:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_not_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.nz | QuarkCompareOpcode.z:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=str(info.b >> 3)))
+                    case _:
+                        il.append(il.unimplemented())
+            case QuarkOpcode.icmp:
+                cmp_op = QuarkCompareOpcode(info.b & 7)
+                match cmp_op:
+                    case QuarkCompareOpcode.lt:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_less_than(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.le:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_less_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.ge:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_greater_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.gt:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_greater_than(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.eq:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.ne:
+                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_not_equal(4, ra_expr(), cval())))
+                    case QuarkCompareOpcode.nz | QuarkCompareOpcode.z:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=str(info.b >> 3)))
+                    case _:
+                        il.append(il.unimplemented())
+            case _:
+                il.append(il.unimplemented())
+
+        if after is not None:
+            il.mark_label(after)
+
         return 4
+
+    def get_flag_write_low_level_il(
+        self, op: LowLevelILOperation, size: int, write_type: Optional[FlagWriteTypeName], flag: FlagType,
+        operands: List['ILRegisterType'], il: 'LowLevelILFunction'
+    ) -> 'ExpressionIndex':
+        print(f"get_flag_write_low_level_il: {op} {size} {write_type} {flag} {operands}")
+        return il.unimplemented()
 
 
 QuarkArch.register()
