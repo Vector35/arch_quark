@@ -5,7 +5,7 @@ from binaryninja import Architecture, RegisterInfo, InstructionInfo, Instruction
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil, \
     LowLevelILLabel, LowLevelILFunction, LLIL_TEMP, FlagRole, LowLevelILOperation, \
     FlagWriteTypeName, FlagType, ILRegisterType, ExpressionIndex, IntrinsicInfo, Type, \
-    IntrinsicInput
+    IntrinsicInput, CallingConvention, Platform
 
 
 def rol(i, n):
@@ -972,6 +972,48 @@ class QuarkArch(Architecture):
         return il.unimplemented()
 
 
-QuarkArch.register()
-BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, Architecture['Quark'])
+class QuarkCallingConvention(CallingConvention):
+    name = "qcall"
+    caller_saved_regs = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
+    callee_saved_regs = ['r16', 'r17', 'r18', 'r19', 'r20', 'r21', 'r22', 'r23', 'r24', 'r25', 'r26', 'r27', 'r28']
+    int_arg_regs = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
+    int_return_reg = 'r1'
+    high_int_return_reg = 'r2'
+    stack_reserved_for_arg_regs = True
 
+
+class QuarkSyscallCallingConvention(CallingConvention):
+    name = "qsyscall"
+    caller_saved_regs = ['r1', 'r2']
+    callee_saved_regs = ['r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15', 'r16', 'r17', 'r18', 'r19', 'r20', 'r21', 'r22', 'r23', 'r24', 'r25', 'r26', 'r27', 'r28']
+    int_arg_regs = ['syscall_num', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
+    int_return_reg = 'r1'
+    high_int_return_reg = 'r2'
+    stack_reserved_for_arg_regs = True
+    eligible_for_heuristics = False
+
+
+class LinuxQuarkPlatform(Platform):
+    name = "linux-quark"
+
+
+QuarkArch.register()
+qarch = Architecture['Quark']
+
+qcc = QuarkCallingConvention(qarch, "qcall")
+qarch.register_calling_convention(qcc)
+qarch.default_calling_convention = qcc
+
+qsyscall = QuarkSyscallCallingConvention(qarch, "qsyscall")
+qarch.register_calling_convention(qsyscall)
+
+qlinuxplatform = LinuxQuarkPlatform(qarch)
+qlinuxplatform.register_calling_convention(qcc)
+qlinuxplatform.register_calling_convention(qsyscall)
+qlinuxplatform.default_calling_convention = qcc
+qlinuxplatform.system_call_convention = qsyscall
+qlinuxplatform.register("linux")
+
+BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, qarch)
+BinaryViewType['ELF'].register_platform(0, qarch, qlinuxplatform)
+BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
