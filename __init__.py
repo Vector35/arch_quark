@@ -282,7 +282,11 @@ class QuarkArch(Architecture):
 
     def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
-        op = QuarkOpcode(info.op)
+        try:
+            op = QuarkOpcode(info.op)
+        except ValueError:
+            print(f"Invalid opcode {info.op:#x} at {addr:#x} {data}")
+            return None
 
         tokens = []
 
@@ -627,7 +631,11 @@ class QuarkArch(Architecture):
 
     def get_instruction_low_level_il(self, data: bytes, addr: int, il: LowLevelILFunction) -> Optional[int]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
-        op = QuarkOpcode(info.op)
+        try:
+            op = QuarkOpcode(info.op)
+        except ValueError:
+            print(f"Invalid opcode {info.op:#x} at {addr:#x} {data}")
+            return None
 
         def ra():
             assert info.a != self.ip_reg_index, "Can't handle ip"
@@ -769,14 +777,17 @@ class QuarkArch(Architecture):
             case QuarkOpcode.stbu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
                 il.append(il.store(1, il.reg(4, addr), il.low_part(1, ra_expr())))
             case QuarkOpcode.sthu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
                 il.append(il.store(2, il.reg(4, addr), il.low_part(2, ra_expr())))
             case QuarkOpcode.stwu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
+                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
                 il.append(il.store(4, il.reg(4, addr), ra_expr()))
             case QuarkOpcode.stmw:
                 addr = LLIL_TEMP(1)
@@ -801,7 +812,6 @@ class QuarkArch(Architecture):
             case QuarkOpcode.jmp:
                 il.append(il.jump(il.const(4, addr + 4 + (info.imm22 << 2))))
             case QuarkOpcode.call:
-                il.append(il.set_reg(4, 'lr', il.const(4, addr + 4)))
                 il.append(il.call(il.const(4, addr + 4 + (info.imm22 << 2))))
             case QuarkOpcode.add:
                 il.append(il.set_reg(4, ra(), il.add(4, rb_expr(), cval())))
@@ -868,7 +878,6 @@ class QuarkArch(Architecture):
                     case QuarkIntegerOpcode.call:
                         addr = LLIL_TEMP(1)
                         il.append(il.set_reg(4, addr, ra_expr()))
-                        il.append(il.set_reg(4, 'lr', il.const(4, addr + 4)))
                         il.append(il.call(il.reg(4, addr)))
                     case QuarkIntegerOpcode.neg:
                         il.append(il.set_reg(4, ra(), il.neg_expr(4, rc_expr())))
