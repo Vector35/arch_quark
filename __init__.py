@@ -5,6 +5,96 @@ from binaryninja import Architecture, RegisterInfo, InstructionInfo, Instruction
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType
 
 
+
+class QuarkInstruction:
+    def __init__(self, instr: int):
+        self.instr = instr
+
+    @property
+    def cond(self):
+        return self.instr >> 28
+
+    @property
+    def op(self):
+        return (self.instr >> 22) & 0x3f
+
+    @property
+    def a(self):
+        return (self.instr >> 17) & 31
+
+    @property
+    def b(self):
+        return (self.instr >> 12) & 31
+
+    @property
+    def c(self):
+        return (self.instr >> 5) & 31
+
+    @property
+    def d(self):
+        return self.instr & 31
+
+    @property
+    def imm5i(self):
+        if self.instr & 0x10:
+            return -(self.instr & 0x1f)
+        return self.instr & 0x1f
+
+    @property
+    def imm5(self):
+        if self.instr & 0x10:
+            return (self.instr & 0x1f) | 0xffffffe0
+        return self.instr & 0x1f
+
+    @property
+    def imm11i(self):
+        if self.instr & 0x400:
+            return -(self.instr & 0x7ff)
+        return self.instr & 0x7ff
+
+    @property
+    def imm11(self):
+        if self.instr & 0x400:
+            return (self.instr & 0x7ff) | 0xfffff800
+        return self.instr & 0x7ff
+
+    @property
+    def imm17i(self):
+        if self.instr & 0x10000:
+            return -(self.instr & 0x1ffff)
+        return self.instr & 0x1ffff
+
+    @property
+    def imm17(self):
+        if self.instr & 0x10000:
+            return (self.instr & 0x1ffff) | 0xfffe0000
+        return self.instr & 0x1ffff
+
+    @property
+    def imm22i(self):
+        if self.instr & 0x200000:
+            return -(self.instr & 0x3fffff)
+        return self.instr & 0x3fffff
+
+    @property
+    def imm22(self):
+        if self.instr & 0x200000:
+            return (self.instr & 0x3fffff) | 0xffc00000
+        return self.instr & 0x3fffff
+
+    @property
+    def immhi(self):
+        return (self.instr & 0xffff) << 16
+
+    @property
+    def smallimm(self):
+        return self.instr & 0x400
+
+    @property
+    def largeimm(self):
+        return self.instr & 0x800
+
+
 class QuarkArch(Architecture):
     name = "Quark"
     address_size = 4
@@ -58,8 +148,26 @@ class QuarkArch(Architecture):
         return result
 
     def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+
         tokens = []
+        tokens.extend([
+            InstructionTextToken(InstructionTextTokenType.TextToken, 'cond: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.cond}'),
+            InstructionTextToken(InstructionTextTokenType.TextToken, ' op: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.op}'),
+            InstructionTextToken(InstructionTextTokenType.TextToken, ' a: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.a}'),
+            InstructionTextToken(InstructionTextTokenType.TextToken, ' b: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.b}'),
+            InstructionTextToken(InstructionTextTokenType.TextToken, ' c: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.c}'),
+            InstructionTextToken(InstructionTextTokenType.TextToken, ' d: '),
+            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.d}'),
+        ])
+
         return tokens, 4
+
 
 QuarkArch.register()
 BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, Architecture['Quark'])
