@@ -4,8 +4,9 @@ from typing import Optional, Tuple, List
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil, \
     LowLevelILLabel, LowLevelILFunction, LLIL_TEMP, FlagRole, LowLevelILOperation, \
-    FlagWriteTypeName, FlagType, ILRegisterType, ExpressionIndex, IntrinsicInfo, Type, \
-    IntrinsicInput, CallingConvention, Platform
+    FlagWriteTypeName, FlagType, ILRegisterType, IntrinsicInfo, Type, \
+    IntrinsicInput, CallingConvention, Platform, ILRegister
+from binaryninja.lowlevelil import ExpressionIndex
 
 
 def rol(i, n):
@@ -222,15 +223,27 @@ class QuarkArch(Architecture):
         'cc3': FlagRole.SpecialFlagRole,
     }
     flag_write_types = {
-        'none', '*', '0', '1', '2', '3'
+        'none', '3',
+        '0lt', '0le', '0ge', '0gt', '0eq', '0ne', '0nz', '0z',
+        '1lt', '1le', '1ge', '1gt', '1eq', '1ne', '1nz', '1z',
+        '2lt', '2le', '2ge', '2gt', '2eq', '2ne', '2nz', '2z',
+        '3lt', '3le', '3ge', '3gt', '3eq', '3ne', '3nz', '3z',
+        '0ilt', '0ile', '0ige', '0igt', '0ieq', '0ine', '0inz', '0iz',
+        '1ilt', '1ile', '1ige', '1igt', '1ieq', '1ine', '1inz', '1iz',
+        '2ilt', '2ile', '2ige', '2igt', '2ieq', '2ine', '2inz', '2iz',
+        '3ilt', '3ile', '3ige', '3igt', '3ieq', '3ine', '3inz', '3iz',
     }
     flags_written_by_flag_write_type = {
         'none': {},
-        '*': ['cc0', 'cc1', 'cc2', 'cc3'],
-        '0': ['cc0'],
-        '1': ['cc1'],
-        '2': ['cc2'],
         '3': ['cc3'],
+        '0lt': ['cc0'], '0le': ['cc0'], '0ge': ['cc0'], '0gt': ['cc0'], '0eq': ['cc0'], '0ne': ['cc0'], '0nz': ['cc0'], '0z': ['cc0'],
+        '1lt': ['cc1'], '1le': ['cc1'], '1ge': ['cc1'], '1gt': ['cc1'], '1eq': ['cc1'], '1ne': ['cc1'], '1nz': ['cc1'], '1z': ['cc1'],
+        '2lt': ['cc2'], '2le': ['cc2'], '2ge': ['cc2'], '2gt': ['cc2'], '2eq': ['cc2'], '2ne': ['cc2'], '2nz': ['cc2'], '2z': ['cc2'],
+        '3lt': ['cc3'], '3le': ['cc3'], '3ge': ['cc3'], '3gt': ['cc3'], '3eq': ['cc3'], '3ne': ['cc3'], '3nz': ['cc3'], '3z': ['cc3'],
+        '0ilt': ['cc0'], '0ile': ['cc0'], '0ige': ['cc0'], '0igt': ['cc0'], '0ieq': ['cc0'], '0ine': ['cc0'], '0inz': ['cc0'], '0iz': ['cc0'],
+        '1ilt': ['cc1'], '1ile': ['cc1'], '1ige': ['cc1'], '1igt': ['cc1'], '1ieq': ['cc1'], '1ine': ['cc1'], '1inz': ['cc1'], '1iz': ['cc1'],
+        '2ilt': ['cc2'], '2ile': ['cc2'], '2ige': ['cc2'], '2igt': ['cc2'], '2ieq': ['cc2'], '2ine': ['cc2'], '2inz': ['cc2'], '2iz': ['cc2'],
+        '3ilt': ['cc3'], '3ile': ['cc3'], '3ige': ['cc3'], '3igt': ['cc3'], '3ieq': ['cc3'], '3ine': ['cc3'], '3inz': ['cc3'], '3iz': ['cc3'],
     }
     stack_pointer = 'sp'
     link_reg = 'lr'
@@ -687,21 +700,24 @@ class QuarkArch(Architecture):
         after = None
         if info.cond & 8:
             # Conditionally executed
-            # TODO: Can we combine with the jmp instruction for jmpcc or equivalent
-            # TODO: This should use flags
             before = LowLevelILLabel()
             after = LowLevelILLabel()
-            il.append(
-                il.if_expr(
-                    il.compare_equal(
-                        0,
+            if info.cond & 1:
+                il.append(
+                    il.if_expr(
                         il.flag(f"cc{(info.cond >> 1) & 3}"),
-                        il.const(0, info.cond & 1)
-                    ),
-                    before,
-                    after
+                        before,
+                        after
+                    )
                 )
-            )
+            else:
+                il.append(
+                    il.if_expr(
+                        il.not_expr(0, il.flag(f"cc{(info.cond >> 1) & 3}")),
+                        before,
+                        after
+                    )
+                )
             il.mark_label(before)
         elif info.cond & 1:
             # Always skipped apparently
@@ -922,38 +938,42 @@ class QuarkArch(Architecture):
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_less_than(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}lt"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_less_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}le"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_greater_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ge"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_unsigned_greater_than(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}gt"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}eq"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_not_equal(4, ra_expr(), cval())))
-                    case QuarkCompareOpcode.nz | QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=str(info.b >> 3)))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ne"))
+                    case QuarkCompareOpcode.nz:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}nz"))
+                    case QuarkCompareOpcode.z:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}z"))
                     case _:
                         il.append(il.unimplemented())
             case QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_less_than(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ilt"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_less_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ile"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_greater_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ige"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_signed_greater_than(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}igt"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_equal(4, ra_expr(), cval())))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ieq"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.b >> 3}"), il.compare_not_equal(4, ra_expr(), cval())))
-                    case QuarkCompareOpcode.nz | QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=str(info.b >> 3)))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ine"))
+                    case QuarkCompareOpcode.nz:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}inz"))
+                    case QuarkCompareOpcode.z:
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}iz"))
                     case _:
                         il.append(il.unimplemented())
             case _:
@@ -968,7 +988,55 @@ class QuarkArch(Architecture):
         self, op: LowLevelILOperation, size: int, write_type: Optional[FlagWriteTypeName], flag: FlagType,
         operands: List['ILRegisterType'], il: 'LowLevelILFunction'
     ) -> 'ExpressionIndex':
-        print(f"get_flag_write_low_level_il: {op} {size} {write_type} {flag} {operands}")
+
+        def operand_to_expr(operand) -> 'ExpressionIndex':
+            if isinstance(operand, ILRegister):
+                return il.reg(4, operand.name)
+            if isinstance(operand, int):
+                return il.const(4, operand)
+            assert False, f"Unexpected operand type: {operand}"
+
+        match write_type:
+            case '0lt' | '1lt' | '2lt' | '3lt':
+                assert len(operands) == 2
+                return il.compare_unsigned_less_than(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0ilt' | '1ilt' | '2ilt' | '3ilt':
+                assert len(operands) == 2
+                return il.compare_signed_less_than(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0le' | '1le' | '2le' | '3le':
+                assert len(operands) == 2
+                return il.compare_unsigned_less_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0ile' | '1ile' | '2ile' | '3ile':
+                assert len(operands) == 2
+                return il.compare_signed_less_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0gt' | '1gt' | '2gt' | '3gt':
+                assert len(operands) == 2
+                return il.compare_unsigned_greater_than(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0igt' | '1igt' | '2igt' | '3igt':
+                assert len(operands) == 2
+                return il.compare_signed_greater_than(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0ge' | '1ge' | '2ge' | '3ge':
+                assert len(operands) == 2
+                return il.compare_unsigned_greater_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0ige' | '1ige' | '2ige' | '3ige':
+                assert len(operands) == 2
+                return il.compare_signed_greater_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0eq' | '1eq' | '2eq' | '3eq' | '0ieq' | '1ieq' | '2ieq' | '3ieq':
+                assert len(operands) == 2
+                return il.compare_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0ne' | '1ne' | '2ne' | '3ne' | '0ine' | '1ine' | '2ine' | '3ine':
+                assert len(operands) == 2
+                return il.compare_not_equal(size, operand_to_expr(operands[0]), operand_to_expr(operands[1]))
+            case '0nz' | '1nz' | '2nz' | '3nz' | '0inz' | '1inz' | '2inz' | '3inz':
+                assert len(operands) == 2
+                return il.compare_not_equal(size, il.and_expr(size, operand_to_expr(operands[0]), operand_to_expr(operands[1])), il.const(size, 0))
+            case '0z' | '1z' | '2z' | '3z' | '0iz' | '1iz' | '2iz' | '3iz':
+                assert len(operands) == 2
+                return il.compare_equal(size, il.and_expr(size, operand_to_expr(operands[0]), operand_to_expr(operands[1])), il.const(size, 0))
+            case '3':
+                # print(f"{op} {size} {write_type} {flag} {operands} {il}")
+                return self.get_default_flag_write_low_level_il(op, size, FlagRole.CarryFlagRole, operands, il)
+
         return il.unimplemented()
 
 
