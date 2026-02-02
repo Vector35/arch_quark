@@ -979,7 +979,7 @@ class QuarkCallingConvention(CallingConvention):
     int_arg_regs = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
     int_return_reg = 'r1'
     high_int_return_reg = 'r2'
-    stack_reserved_for_arg_regs = True
+    arg_regs_for_varargs = False
 
 
 class QuarkSyscallCallingConvention(CallingConvention):
@@ -989,7 +989,6 @@ class QuarkSyscallCallingConvention(CallingConvention):
     int_arg_regs = ['syscall_num', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
     int_return_reg = 'r1'
     high_int_return_reg = 'r2'
-    stack_reserved_for_arg_regs = True
     eligible_for_heuristics = False
 
 
