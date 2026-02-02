@@ -5,6 +5,104 @@ from binaryninja import Architecture, RegisterInfo, InstructionInfo, Instruction
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType
 
 
+def rol(i, n):
+    return ((i << n) & 0xffffffff) | (i >> (32 - n))
+
+
+def ror(i, n):
+    return (i >> n) | ((i << (32 - n)) & 0xffffffff)
+
+
+def i32(i):
+    if i >= 0x80000000:
+        return -(0x100000000 - (i & 0xffffffff))
+    return i & 0x7fffffff
+
+
+class QuarkOpcode(enum.IntEnum):
+    ldb = 0x0
+    ldh = 0x1
+    ldw = 0x2
+    ldmw = 0x3
+    stb = 0x4
+    sth = 0x5
+    stw = 0x6
+    stmw = 0x7
+    ldbu = 0x8
+    ldhu = 0x9
+    ldwu = 0xa
+    ldmwu = 0xb
+    stbu = 0xc
+    sthu = 0xd
+    stwu = 0xe
+    stmwu = 0xf
+    ldsxb = 0x10
+    ldsxh = 0x11
+    ldsxbu = 0x12
+    ldsxhu = 0x13
+    ldi = 0x14
+    ldih = 0x15
+    jmp = 0x16
+    call = 0x17
+    add = 0x18
+    sub = 0x19
+    addx = 0x1a
+    subx = 0x1b
+    mulx = 0x1c
+    imulx = 0x1d
+    mul = 0x1e
+    integer_group = 0x1f
+    div = 0x20
+    idiv = 0x21
+    mod = 0x22
+    imod = 0x23
+    and_ = 0x24
+    or_ = 0x25
+    xor = 0x26
+    sar = 0x27
+    shl = 0x28
+    shr = 0x29
+    rol = 0x2a
+    ror = 0x2b
+    syscall = 0x2c
+    cmp = 0x2d
+    icmp = 0x2e
+
+
+class QuarkIntegerOpcode(enum.IntEnum):
+    mov = 0x0
+    xchg = 0x1
+    sxb = 0x2
+    sxh = 0x3
+    swaph = 0x4
+    swapw = 0x5
+    call = 0x6
+    neg = 0x8
+    not_ = 0x9
+    zxb = 0xa
+    zxh = 0xb
+    ldcr = 0xe
+    stcr = 0xf
+    syscall = 0x10
+    setcc = 0x18
+    clrcc = 0x19
+    notcc = 0x1a
+    movcc = 0x1b
+    andcc = 0x1c
+    orcc = 0x1d
+    xorcc = 0x1e
+
+
+class QuarkCompareOpcode(enum.IntEnum):
+    less = 0
+    less_equal = 1
+    greater_equal = 2
+    greater = 3
+    equal = 4
+    not_equal = 5
+    bit_test_nonzero = 6
+    bit_test_zero = 7
+
 
 class QuarkInstruction:
     def __init__(self, instr: int):
@@ -149,22 +247,22 @@ class QuarkArch(Architecture):
 
     def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
+        op = QuarkOpcode(info.op)
 
         tokens = []
-        tokens.extend([
-            InstructionTextToken(InstructionTextTokenType.TextToken, 'cond: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.cond}'),
-            InstructionTextToken(InstructionTextTokenType.TextToken, ' op: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.op}'),
-            InstructionTextToken(InstructionTextTokenType.TextToken, ' a: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.a}'),
-            InstructionTextToken(InstructionTextTokenType.TextToken, ' b: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.b}'),
-            InstructionTextToken(InstructionTextTokenType.TextToken, ' c: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.c}'),
-            InstructionTextToken(InstructionTextTokenType.TextToken, ' d: '),
-            InstructionTextToken(InstructionTextTokenType.TextToken, f'{info.d}'),
-        ])
+        match op:
+            case QuarkOpcode.integer_group:
+                int_op = QuarkIntegerOpcode(info.b)
+                match int_op:
+                    case _:
+                        tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name)])
+            case QuarkOpcode.cmp | QuarkOpcode.icmp:
+                cmp_op = QuarkCompareOpcode(info.b & 7)
+                match cmp_op:
+                    case _:
+                        tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, cmp_op.name)])
+            case _:
+                tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, op.name)])
 
         return tokens, 4
 
