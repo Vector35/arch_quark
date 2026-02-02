@@ -989,81 +989,149 @@ class QuarkArch(Architecture):
         operands: List['ILRegisterType'], il: 'LowLevelILFunction'
     ) -> 'ExpressionIndex':
 
-        def expressionify(size, foo, temps_are_conds=False):
-            """ turns the "reg or constant"  operands to get_flag_write_low_level_il()
-                into lifted expressions """
-
-            if isinstance(foo, ILRegister):
-                # LowLevelILExpr is different than ILRegister
-                if temps_are_conds and LLIL_TEMP(foo.index):
-                    # can't use il.reg() 'cause it will do lookup in architecture flags
-                    return il.expr(LowLevelILOperation.LLIL_FLAG, foo.index)
-                    #return il.reg(size, 'cond:%d' % LLIL_GET_TEMP_REG_INDEX(foo))
-
-                # promote it to an LLIL_REG (read register)
-                return il.reg(size, foo)
-
-            elif isinstance(foo, ILFlag):
-                return il.flag(foo)
-
-            elif isinstance(foo, int):
-                return il.const(size, foo)
-
+        def get_expr_for_register_or_constant(size, operand):
+            if isinstance(operand, ILRegister):
+                return il.reg(size, operand)
+            elif isinstance(operand, ILFlag):  # Fixed in >= 5.3
+                return il.flag(operand.index)
+            elif isinstance(operand, int):
+                return il.const(size, operand)
             else:
-                raise Exception('expressionify() doesn\'t know how to handle il: %s\n%s\n' % (foo, type(foo)))
+                assert False, "Not handled"
+
+        def get_expr_for_flag_or_constant(operand):
+            # For ADC/SBB/RLC/RRC, the carry flag is passed as a temporary "register"
+            # This is super specific and only affects those four instructions and one operand
+            if isinstance(operand, ILRegister):
+                return il.flag(operand.index)
+            elif isinstance(operand, ILFlag):  # Fixed in >= 5.3
+                return il.flag(operand.index)
+            elif isinstance(operand, int):
+                return il.const(size, operand)
+            else:
+                assert False, "Not handled"
 
         match write_type:
             case '0lt' | '1lt' | '2lt' | '3lt':
                 assert len(operands) == 2
-                return il.compare_unsigned_less_than(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_unsigned_less_than(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0ilt' | '1ilt' | '2ilt' | '3ilt':
                 assert len(operands) == 2
-                return il.compare_signed_less_than(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_signed_less_than(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0le' | '1le' | '2le' | '3le':
                 assert len(operands) == 2
-                return il.compare_unsigned_less_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_unsigned_less_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0ile' | '1ile' | '2ile' | '3ile':
                 assert len(operands) == 2
-                return il.compare_signed_less_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_signed_less_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0gt' | '1gt' | '2gt' | '3gt':
                 assert len(operands) == 2
-                return il.compare_unsigned_greater_than(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_unsigned_greater_than(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0igt' | '1igt' | '2igt' | '3igt':
                 assert len(operands) == 2
-                return il.compare_signed_greater_than(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_signed_greater_than(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0ge' | '1ge' | '2ge' | '3ge':
                 assert len(operands) == 2
-                return il.compare_unsigned_greater_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_unsigned_greater_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0ige' | '1ige' | '2ige' | '3ige':
                 assert len(operands) == 2
-                return il.compare_signed_greater_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_signed_greater_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0eq' | '1eq' | '2eq' | '3eq' | '0ieq' | '1ieq' | '2ieq' | '3ieq':
                 assert len(operands) == 2
-                return il.compare_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0ne' | '1ne' | '2ne' | '3ne' | '0ine' | '1ine' | '2ine' | '3ine':
                 assert len(operands) == 2
-                return il.compare_not_equal(size, expressionify(size, operands[0]), expressionify(size, operands[1]))
+                return il.compare_not_equal(
+                    size,
+                    get_expr_for_register_or_constant(size, operands[0]),
+                    get_expr_for_register_or_constant(size, operands[1])
+                )
             case '0nz' | '1nz' | '2nz' | '3nz' | '0inz' | '1inz' | '2inz' | '3inz':
                 assert len(operands) == 2
-                return il.compare_not_equal(size, il.and_expr(size, expressionify(size, operands[0]), expressionify(size, operands[1])), il.const(size, 0))
+                return il.compare_not_equal(
+                    size,
+                    il.and_expr(
+                        size,
+                        get_expr_for_register_or_constant(size, operands[0]),
+                        get_expr_for_register_or_constant(size, operands[1])
+                    ),
+                    il.const(size, 0)
+                )
             case '0z' | '1z' | '2z' | '3z' | '0iz' | '1iz' | '2iz' | '3iz':
                 assert len(operands) == 2
-                return il.compare_equal(size, il.and_expr(size, expressionify(size, operands[0]), expressionify(size, operands[1])), il.const(size, 0))
+                return il.compare_equal(
+                    size,
+                    il.and_expr(
+                        size,
+                        get_expr_for_register_or_constant(size, operands[0]),
+                        get_expr_for_register_or_constant(size, operands[1])
+                    ),
+                    il.const(size, 0)
+                )
             case '3':
                 if op == LowLevelILOperation.LLIL_ADC:
-                    return self.get_default_flag_write_low_level_il(op, size, FlagRole.CarryFlagRole, operands, il)
+                    # ((first + second + carry) >> 32) & 1
+                    return il.compare_unsigned_greater_equal(
+                        8,
+                        il.add(
+                            8,
+                            il.zero_extend(8, get_expr_for_register_or_constant(size, operands[0])),
+                            il.add(
+                                8,
+                                il.zero_extend(8, get_expr_for_register_or_constant(size, operands[1])),
+                                il.zero_extend(8, get_expr_for_flag_or_constant(operands[2]))
+                            )
+                        ),
+                        il.const(8, 0x1_0000_0000)
+                    )
                 if op == LowLevelILOperation.LLIL_SBB:
-                    return il.compare_signed_greater_than(
+                    # ((first - (second + carry)) >> 32) & 1
+                    # Which is always zero unless (second + carry) > first
+                    return il.compare_unsigned_greater_than(
                         size,
                         il.add(
                             size,
-                            expressionify(size, operands[1]),
-                            expressionify(1, operands[2], True)
+                            get_expr_for_register_or_constant(size, operands[1]),
+                            get_expr_for_flag_or_constant(operands[2])
                         ),
-                        expressionify(size, operands[0])
+                        get_expr_for_register_or_constant(size, operands[0])
                     )
-
-                # print(f"{op} {size} {write_type} {flag} {operands} {il}")
 
         return il.unimplemented()
 
