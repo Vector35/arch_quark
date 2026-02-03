@@ -52,6 +52,15 @@ class QuarkArch(Architecture):
     stack_pointer = 'sp'
     link_reg = 'lr'
 
+    def get_instruction_info(self, data: bytes, addr: int) -> Optional[InstructionInfo]:
+        result = InstructionInfo()
+        result.length = 4
+        return result
+
+    def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
+        tokens = []
+        return tokens, 4
+
 QuarkArch.register()
 BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, Architecture['Quark'])
 
