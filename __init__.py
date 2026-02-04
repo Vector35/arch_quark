@@ -72,6 +72,25 @@ class QuarkOpcode(enum.IntEnum):
     cmp = 0x2d
     icmp = 0x2e
 
+    # These are all unimplemented by defined by the spec
+    # fcmp = 0x2f
+    # ldfs = 0x30
+    # ldfd = 0x31
+    # stfs = 0x32
+    # stfd = 0x33
+    # ldfsu = 0x34
+    # ldfdu = 0x35
+    # stfsu = 0x36
+    # stfdu = 0x37
+    # fadd = 0x38
+    # fsub = 0x39
+    # fmul = 0x3a
+    # fdiv = 0x3b
+    # fmod = 0x3c
+    # fpow = 0x3d
+    # flog = 0x3e
+    # float_group = 0x3f
+
 
 class QuarkIntegerOpcode(enum.IntEnum):
     mov = 0x0
@@ -95,6 +114,8 @@ class QuarkIntegerOpcode(enum.IntEnum):
     andcc = 0x1c
     orcc = 0x1d
     xorcc = 0x1e
+    # Unimplemented but defined
+    bp = 0x1f
 
 
 class QuarkCompareOpcode(enum.IntEnum):
@@ -248,8 +269,8 @@ class QuarkArch(Architecture):
     stack_pointer = 'sp'
     link_reg = 'lr'
     intrinsics = {
-        '__byteswaph': IntrinsicInfo([IntrinsicInput(Type.int(2), '')], [Type.int(2, False)]),
-        '__byteswapw': IntrinsicInfo([IntrinsicInput(Type.int(4), '')], [Type.int(4, False)]),
+        '__byteswaph': IntrinsicInfo([IntrinsicInput(Type.int(2, False), 'input')], [Type.int(4, False)]),
+        '__byteswapw': IntrinsicInfo([IntrinsicInput(Type.int(4, False), 'input')], [Type.int(4, False)]),
     }
 
     ip_reg_index = 31
@@ -625,6 +646,10 @@ class QuarkArch(Architecture):
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                             InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{(info.d & 3)}"),
                         ])
+                    case QuarkIntegerOpcode.bp:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                        ])
                     case _:
                         tokens.extend([InstructionTextToken(InstructionTextTokenType.InstructionToken, "??")])
             case QuarkOpcode.cmp | QuarkOpcode.icmp:
@@ -826,9 +851,9 @@ class QuarkArch(Architecture):
                 # (= rb addr)
                 il.append(il.set_reg(4, rb(), il.reg(4, addr)))
             case QuarkOpcode.jmp:
-                il.append(il.jump(il.const(4, addr + 4 + (info.imm22 << 2))))
+                il.append(il.jump(il.const(4, addr + 4 + i32(info.imm22 << 2))))
             case QuarkOpcode.call:
-                il.append(il.call(il.const(4, addr + 4 + (info.imm22 << 2))))
+                il.append(il.call(il.const(4, addr + 4 + i32(info.imm22 << 2))))
             case QuarkOpcode.add:
                 il.append(il.set_reg(4, ra(), il.add(4, rb_expr(), cval())))
             case QuarkOpcode.sub:
@@ -932,6 +957,8 @@ class QuarkArch(Architecture):
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.or_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
                     case QuarkIntegerOpcode.xorcc:
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.xor_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
+                    case QuarkIntegerOpcode.bp:
+                        il.append(il.breakpoint())
                     case _:
                         il.append(il.unimplemented())
             case QuarkOpcode.cmp:
@@ -1134,6 +1161,24 @@ class QuarkArch(Architecture):
                     )
 
         return il.unimplemented()
+
+    def convert_to_nop(self, data: bytes, addr: int = 0) -> Optional[bytes]:
+        return b'\x00\x00\xc0\x17' * (len(data) // 4)
+
+    def is_never_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        return False
+
+    def is_always_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        return False
+
+    def is_invert_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        return False
+
+    def is_skip_and_return_zero_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        return False
+
+    def is_skip_and_return_value_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        return False
 
 
 class QuarkCallingConvention(CallingConvention):
