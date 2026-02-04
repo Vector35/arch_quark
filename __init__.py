@@ -808,7 +808,7 @@ class QuarkArch(Architecture):
             case QuarkOpcode.ldi:
                 il.append(il.set_reg(4, ra(), il.const(4, info.imm17)))
             case QuarkOpcode.ldih:
-                il.append(il.set_reg(4, ra(), il.or_expr(4, ra_expr(), il.const(4, info.immhi))))
+                il.append(il.set_reg(4, ra(), il.or_expr(4, il.zero_extend(4, il.low_part(2, ra_expr())), il.const(4, info.immhi))))
             case QuarkOpcode.stb:
                 il.append(il.store(1, il.add(4, rb_expr(), cval()), il.low_part(1, ra_expr())))
             case QuarkOpcode.sth:
