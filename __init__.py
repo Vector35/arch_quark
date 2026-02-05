@@ -1,12 +1,15 @@
 import enum
+import json
 from typing import Optional, Tuple, List
 
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil, \
     LowLevelILLabel, LowLevelILFunction, LLIL_TEMP, FlagRole, LowLevelILOperation, \
     FlagWriteTypeName, FlagType, ILRegisterType, IntrinsicInfo, Type, \
-    IntrinsicInput, CallingConvention, Platform, ILRegister
-from binaryninja.lowlevelil import ExpressionIndex, ILFlag
+    IntrinsicInput, CallingConvention, Platform, ILRegister, Workflow, AnalysisContext, \
+    Activity, LowLevelILInstruction, LowLevelILSetReg, LowLevelILAdd, ILSourceLocation
+from binaryninja.lowlevelil import ExpressionIndex, ILFlag, InstructionIndex, \
+    LowLevelILConst, LowLevelILReg
 
 
 def rol(i, n):
@@ -1225,3 +1228,87 @@ qlinuxplatform.register("linux")
 BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, qarch)
 BinaryViewType['ELF'].register_platform(0, qarch, qlinuxplatform)
 BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
+
+
+def rewrite_lil_relative_load(context: AnalysisContext):
+    if context.view.arch.name != "Quark":
+        return
+
+    # rA = const
+    # rB = (addr + 4) + rA
+    # rA = rB
+    # ----------------------
+    # rB = (addr + 4 + const)
+
+    any_replaced = False
+    old_llil = context.lifted_il
+    new_llil = LowLevelILFunction(old_llil.arch, source_func=old_llil.source_function)
+    new_llil.prepare_to_copy_function(old_llil)
+    for old_block in old_llil.basic_blocks:
+        new_llil.prepare_to_copy_block(old_block)
+        instructions = iter(range(old_block.start, old_block.end))
+        for old_instr_index in instructions:
+            old_instr: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index)]
+            new_llil.set_current_address(old_instr.address, old_block.arch)
+
+            if old_instr_index + 2 < old_block.end:
+                next_instr: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 1)]
+                next_instr_2: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 2)]
+                match (old_instr, next_instr, next_instr_2):
+                    case (
+                        LowLevelILSetReg(dest=regA, src=LowLevelILConst(constant=const)),
+                        LowLevelILSetReg(
+                            dest=regB,
+                            src=LowLevelILAdd(
+                                left=LowLevelILConst(constant=const_2),
+                                right=LowLevelILReg(src=regA_2)
+                            )
+                        ),
+                        LowLevelILSetReg(dest=regA_3, src=LowLevelILReg(src=regB_2))
+                    ) if const_2 == next_instr_2.address and regA == regA_2 == regA_3 and regB == regB_2:
+                        print(f"we here {old_llil} {next_instr} {next_instr_2} {regA} = {const} + {const_2}")
+                        new_llil.append(
+                            new_llil.set_reg(
+                                old_instr.size,
+                                regA,
+                                new_llil.const(
+                                    old_instr.size,
+                                    const + const_2,
+                                    loc=next_instr.source_location
+                                ),
+                                loc=old_instr.source_location
+                            )
+                        )
+                        new_llil.append(new_llil.nop(loc=next_instr.source_location))
+                        new_llil.append(new_llil.nop(loc=next_instr_2.source_location))
+                        next(instructions)
+                        next(instructions)
+                        any_replaced = True
+                        continue
+
+            new_llil.append(old_instr.copy_to(new_llil))
+
+    if any_replaced:
+        new_llil.finalize()
+        context.lifted_il = new_llil
+
+
+qwf = Workflow("core.function.metaAnalysis").clone("core.function.metaAnalysis")
+qwf.register_activity(Activity(
+    configuration=json.dumps({
+        "name": "arch.quark.rewrite_relative_load",
+        "title": "Quark: Combine Relative Load Instructions",
+        "description": "Combine the instructions for relative loads into one instruction, for improvements in signature generation",
+        "eligibility": {
+            "auto": {
+                "default": False
+            }
+        }
+    }),
+    action=lambda context: rewrite_lil_relative_load(context)
+))
+
+qwf.insert_after("core.function.generateLiftedIL", [
+    "arch.quark.rewrite_relative_load"
+])
+qwf.register()
