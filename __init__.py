@@ -1,5 +1,6 @@
 import enum
 import json
+from pathlib import Path
 from typing import Optional, Tuple, List
 
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
@@ -10,6 +11,7 @@ from binaryninja import Architecture, RegisterInfo, InstructionInfo, Instruction
     Activity, LowLevelILInstruction, LowLevelILSetReg, LowLevelILAdd, ILSourceLocation
 from binaryninja.lowlevelil import ExpressionIndex, ILFlag, InstructionIndex, \
     LowLevelILConst, LowLevelILReg
+from binaryninja.warp import WarpContainer
 
 
 def rol(i, n):
@@ -1206,6 +1208,7 @@ class QuarkSyscallCallingConvention(CallingConvention):
 
 class LinuxQuarkPlatform(Platform):
     name = "linux-quark"
+    type_file_path = str(Path(__file__).parent / "types" / "linux-quark.c")
 
 
 QuarkArch.register()
@@ -1229,15 +1232,15 @@ BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, qarch)
 BinaryViewType['ELF'].register_platform(0, qarch, qlinuxplatform)
 BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
 
+WarpContainer['User'].add_source(str(Path(__file__).parent / "signatures" / "quark_stdlib.warp"))
+
 
 def rewrite_lil_relative_load(context: AnalysisContext):
-    if context.view.arch.name != "Quark":
-        return
-
     # rA = const
     # rB = (addr + 4) + rA
     # rA = rB
     # ----------------------
+    # rA = (addr + 4 + const)
     # rB = (addr + 4 + const)
 
     any_replaced = False
@@ -1266,7 +1269,6 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                         ),
                         LowLevelILSetReg(dest=regA_3, src=LowLevelILReg(src=regB_2))
                     ) if const_2 == next_instr_2.address and regA == regA_2 == regA_3 and regB == regB_2:
-                        print(f"we here {old_llil} {next_instr} {next_instr_2} {regA} = {const} + {const_2}")
                         new_llil.append(
                             new_llil.set_reg(
                                 old_instr.size,
@@ -1279,7 +1281,18 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                                 loc=old_instr.source_location
                             )
                         )
-                        new_llil.append(new_llil.nop(loc=next_instr.source_location))
+                        new_llil.append(
+                            new_llil.set_reg(
+                                old_instr.size,
+                                regB,
+                                new_llil.const(
+                                    old_instr.size,
+                                    const + const_2,
+                                    loc=next_instr.source_location
+                                ),
+                                loc=next_instr.source_location
+                            )
+                        )
                         new_llil.append(new_llil.nop(loc=next_instr_2.source_location))
                         next(instructions)
                         next(instructions)
@@ -1300,9 +1313,13 @@ qwf.register_activity(Activity(
         "title": "Quark: Combine Relative Load Instructions",
         "description": "Combine the instructions for relative loads into one instruction, for improvements in signature generation",
         "eligibility": {
-            "auto": {
-                "default": False
-            }
+            "predicates": [
+                {
+                    "type": "platform",
+                    "operator": "==",
+                    "value": "linux-quark",
+                }
+            ]
         }
     }),
     action=lambda context: rewrite_lil_relative_load(context)

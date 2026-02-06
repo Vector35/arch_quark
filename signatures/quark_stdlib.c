@@ -1,31 +1,9 @@
 #define dont_inline_me_bro() \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); \
-    puts(""); 
+    puts(""); puts(""); puts(""); puts(""); puts(""); puts(""); \
+    puts(""); puts(""); puts(""); puts(""); puts(""); puts(""); \
+    puts(""); puts(""); puts(""); puts(""); puts(""); puts(""); \
+    puts(""); puts(""); puts(""); puts(""); puts(""); puts(""); \
+    puts(""); puts(""); puts("");
 
 
 uint8_t _u8 = (uint8_t)__undefined;
