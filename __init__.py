@@ -905,7 +905,7 @@ class QuarkArch(Architecture):
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
                     case QuarkIntegerOpcode.mov:
-                        if info.a == 31:
+                        if info.a == self.ip_reg_index:
                             il.append(il.jump(cval()))
                         else:
                             il.append(il.set_reg(4, ra(), cval()))
@@ -1312,7 +1312,7 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                                 new_llil.const(
                                     old_instr.size,
                                     const + const_2,
-                                    loc=next_instr.source_location
+                                    loc=next_instr_2.source_location
                                 ),
                                 loc=old_instr.source_location
                             )
@@ -1324,7 +1324,7 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                                 new_llil.const(
                                     old_instr.size,
                                     const + const_2,
-                                    loc=next_instr.source_location
+                                    loc=next_instr_2.source_location
                                 ),
                                 loc=next_instr.source_location
                             )
