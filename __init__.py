@@ -3,13 +3,14 @@ import json
 from pathlib import Path
 from typing import Optional, Tuple, List
 
+import binaryninja
 from binaryninja import Architecture, RegisterInfo, InstructionInfo, InstructionTextToken, \
     InstructionTextTokenType, BinaryViewType, Endianness, BranchType, lowlevelil, \
     LowLevelILLabel, LowLevelILFunction, LLIL_TEMP, FlagRole, LowLevelILOperation, \
     FlagWriteTypeName, FlagType, ILRegisterType, IntrinsicInfo, Type, \
     IntrinsicInput, CallingConvention, Platform, ILRegister, Workflow, AnalysisContext, \
     Activity, LowLevelILInstruction, LowLevelILSetReg, LowLevelILAdd, ILSourceLocation, \
-    TypeLibrary
+    TypeLibrary, BinaryView
 from binaryninja.lowlevelil import ExpressionIndex, ILFlag, InstructionIndex, \
     LowLevelILConst, LowLevelILReg
 from binaryninja.warp import WarpContainer
@@ -1211,6 +1212,12 @@ class LinuxQuarkPlatform(Platform):
     name = "linux-quark"
     type_file_path = str(Path(__file__).parent / "types" / "linux-quark.c")
 
+    def view_init(self, view: BinaryView):
+        if not isinstance(view, BinaryView):  # Fixed in >= 5.3
+            view = BinaryView(handle=binaryninja.core.BNNewViewReference(view))
+        WarpContainer['User'].add_source(str(Path(__file__).parent / "signatures" / "quark_stdlib.warp"))
+        view.add_type_library(TypeLibrary.from_name(self.arch, "stdlib"))
+
 
 QuarkArch.register()
 qarch = Architecture['Quark']
@@ -1235,40 +1242,6 @@ BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
 
 for file in (Path(__file__).parent / "typelib").glob("*.bntl"):
     TypeLibrary.load_from_file(str(file))
-
-
-# Need to add warp containers and type libraries later on in initialization for Reasons
-# Use a module workflow for this apparently?
-def load_types(ctx: AnalysisContext):
-    WarpContainer['User'].add_source(str(Path(__file__).parent / "signatures" / "quark_stdlib.warp"))
-    ctx.view.add_type_library(TypeLibrary.from_name(qarch, "stdlib"))
-
-
-qmwf = Workflow("core.module.metaAnalysis").clone("core.module.metaAnalysis")
-qmwf.register_activity(Activity(
-    configuration=json.dumps({
-        "name": "arch.quark.load_types",
-        "title": "Quark: Load Types",
-        "role": "action",
-        "description": "Load Type Libraries and WARP signatures for a Quark binary.",
-        "eligibility": {
-            "runOnce": True,
-            "predicates": [
-                {
-                    "type": "platform",
-                    "operator": "==",
-                    "value": "linux-quark",
-                }
-            ]
-        }
-    }),
-    action=lambda context: load_types(context)
-))
-
-qmwf.insert("core.module.loadDebugInfo", [
-    "arch.quark.load_types"
-])
-qmwf.register()
 
 
 def rewrite_lil_relative_load(context: AnalysisContext):
