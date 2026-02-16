@@ -10,7 +10,7 @@ from binaryninja import Architecture, RegisterInfo, InstructionInfo, Instruction
     FlagWriteTypeName, FlagType, ILRegisterType, IntrinsicInfo, Type, \
     IntrinsicInput, CallingConvention, Platform, ILRegister, Workflow, AnalysisContext, \
     Activity, LowLevelILInstruction, LowLevelILSetReg, LowLevelILAdd, ILSourceLocation, \
-    TypeLibrary, BinaryView
+    TypeLibrary, BinaryView, LowLevelILFlagCondition, SemanticGroupType
 from binaryninja.lowlevelil import ExpressionIndex, ILFlag, InstructionIndex, \
     LowLevelILConst, LowLevelILReg
 from binaryninja.warp import WarpContainer
@@ -250,28 +250,119 @@ class QuarkArch(Architecture):
         'cc2': FlagRole.SpecialFlagRole,
         'cc3': FlagRole.SpecialFlagRole,
     }
+    semantic_flag_classes = [
+        'cc0.cmp.lt',  'cc0.cmp.le',  'cc0.cmp.ge',  'cc0.cmp.gt',  'cc0.cmp.eq',  'cc0.cmp.ne',  'cc0.cmp.z',  'cc0.cmp.nz',
+        'cc0.icmp.lt', 'cc0.icmp.le', 'cc0.icmp.ge', 'cc0.icmp.gt', 'cc0.icmp.eq', 'cc0.icmp.ne', 'cc0.icmp.z', 'cc0.icmp.nz',
+        'cc1.cmp.lt',  'cc1.cmp.le',  'cc1.cmp.ge',  'cc1.cmp.gt',  'cc1.cmp.eq',  'cc1.cmp.ne',  'cc1.cmp.z',  'cc1.cmp.nz',
+        'cc1.icmp.lt', 'cc1.icmp.le', 'cc1.icmp.ge', 'cc1.icmp.gt', 'cc1.icmp.eq', 'cc1.icmp.ne', 'cc1.icmp.z', 'cc1.icmp.nz',
+        'cc2.cmp.lt',  'cc2.cmp.le',  'cc2.cmp.ge',  'cc2.cmp.gt',  'cc2.cmp.eq',  'cc2.cmp.ne',  'cc2.cmp.z',  'cc2.cmp.nz',
+        'cc2.icmp.lt', 'cc2.icmp.le', 'cc2.icmp.ge', 'cc2.icmp.gt', 'cc2.icmp.eq', 'cc2.icmp.ne', 'cc2.icmp.z', 'cc2.icmp.nz',
+        'cc3.cmp.lt',  'cc3.cmp.le',  'cc3.cmp.ge',  'cc3.cmp.gt',  'cc3.cmp.eq',  'cc3.cmp.ne',  'cc3.cmp.z',  'cc3.cmp.nz',
+        'cc3.icmp.lt', 'cc3.icmp.le', 'cc3.icmp.ge', 'cc3.icmp.gt', 'cc3.icmp.eq', 'cc3.icmp.ne', 'cc3.icmp.z', 'cc3.icmp.nz',
+    ]
+    semantic_flag_groups = [
+        'cc0',
+        'cc1',
+        'cc2',
+        'cc3',
+    ]
+    flags_required_for_semantic_flag_group = {
+        'cc0': ['cc0'],
+        'cc1': ['cc1'],
+        'cc2': ['cc2'],
+        'cc3': ['cc3'],
+    }
+    flag_conditions_for_semantic_flag_group = {
+        'cc0': {
+            'cc0.cmp.lt': LowLevelILFlagCondition.LLFC_ULT,
+            'cc0.cmp.le': LowLevelILFlagCondition.LLFC_ULE,
+            'cc0.cmp.ge': LowLevelILFlagCondition.LLFC_UGE,
+            'cc0.cmp.gt': LowLevelILFlagCondition.LLFC_UGT,
+            'cc0.cmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc0.cmp.ne': LowLevelILFlagCondition.LLFC_NE,
+            'cc0.icmp.lt': LowLevelILFlagCondition.LLFC_SLT,
+            'cc0.icmp.le': LowLevelILFlagCondition.LLFC_SLE,
+            'cc0.icmp.ge': LowLevelILFlagCondition.LLFC_SGE,
+            'cc0.icmp.gt': LowLevelILFlagCondition.LLFC_SGT,
+            'cc0.icmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc0.icmp.ne': LowLevelILFlagCondition.LLFC_NE,
+        },
+        'cc1': {
+            'cc1.cmp.lt': LowLevelILFlagCondition.LLFC_ULT,
+            'cc1.cmp.le': LowLevelILFlagCondition.LLFC_ULE,
+            'cc1.cmp.ge': LowLevelILFlagCondition.LLFC_UGE,
+            'cc1.cmp.gt': LowLevelILFlagCondition.LLFC_UGT,
+            'cc1.cmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc1.cmp.ne': LowLevelILFlagCondition.LLFC_NE,
+            'cc1.icmp.lt': LowLevelILFlagCondition.LLFC_SLT,
+            'cc1.icmp.le': LowLevelILFlagCondition.LLFC_SLE,
+            'cc1.icmp.ge': LowLevelILFlagCondition.LLFC_SGE,
+            'cc1.icmp.gt': LowLevelILFlagCondition.LLFC_SGT,
+            'cc1.icmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc1.icmp.ne': LowLevelILFlagCondition.LLFC_NE,
+        },
+        'cc2': {
+            'cc2.cmp.lt': LowLevelILFlagCondition.LLFC_ULT,
+            'cc2.cmp.le': LowLevelILFlagCondition.LLFC_ULE,
+            'cc2.cmp.ge': LowLevelILFlagCondition.LLFC_UGE,
+            'cc2.cmp.gt': LowLevelILFlagCondition.LLFC_UGT,
+            'cc2.cmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc2.cmp.ne': LowLevelILFlagCondition.LLFC_NE,
+            'cc2.icmp.lt': LowLevelILFlagCondition.LLFC_SLT,
+            'cc2.icmp.le': LowLevelILFlagCondition.LLFC_SLE,
+            'cc2.icmp.ge': LowLevelILFlagCondition.LLFC_SGE,
+            'cc2.icmp.gt': LowLevelILFlagCondition.LLFC_SGT,
+            'cc2.icmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc2.icmp.ne': LowLevelILFlagCondition.LLFC_NE,
+        },
+        'cc3': {
+            'cc3.cmp.lt': LowLevelILFlagCondition.LLFC_ULT,
+            'cc3.cmp.le': LowLevelILFlagCondition.LLFC_ULE,
+            'cc3.cmp.ge': LowLevelILFlagCondition.LLFC_UGE,
+            'cc3.cmp.gt': LowLevelILFlagCondition.LLFC_UGT,
+            'cc3.cmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc3.cmp.ne': LowLevelILFlagCondition.LLFC_NE,
+            'cc3.icmp.lt': LowLevelILFlagCondition.LLFC_SLT,
+            'cc3.icmp.le': LowLevelILFlagCondition.LLFC_SLE,
+            'cc3.icmp.ge': LowLevelILFlagCondition.LLFC_SGE,
+            'cc3.icmp.gt': LowLevelILFlagCondition.LLFC_SGT,
+            'cc3.icmp.eq': LowLevelILFlagCondition.LLFC_E,
+            'cc3.icmp.ne': LowLevelILFlagCondition.LLFC_NE,
+        },
+    }
+    semantic_class_for_flag_write_type = {
+        'cc0.cmp.lt':  'cc0.cmp.lt',  'cc0.cmp.le':  'cc0.cmp.le',  'cc0.cmp.ge':  'cc0.cmp.ge',  'cc0.cmp.gt':  'cc0.cmp.gt',  'cc0.cmp.eq':  'cc0.cmp.eq',  'cc0.cmp.ne':  'cc0.cmp.ne',  'cc0.cmp.z':  'cc0.cmp.z',  'cc0.cmp.nz':  'cc0.cmp.nz',
+        'cc0.icmp.lt': 'cc0.icmp.lt', 'cc0.icmp.le': 'cc0.icmp.le', 'cc0.icmp.ge': 'cc0.icmp.ge', 'cc0.icmp.gt': 'cc0.icmp.gt', 'cc0.icmp.eq': 'cc0.icmp.eq', 'cc0.icmp.ne': 'cc0.icmp.ne', 'cc0.icmp.z': 'cc0.icmp.z', 'cc0.icmp.nz': 'cc0.icmp.nz',
+        'cc1.cmp.lt':  'cc1.cmp.lt',  'cc1.cmp.le':  'cc1.cmp.le',  'cc1.cmp.ge':  'cc1.cmp.ge',  'cc1.cmp.gt':  'cc1.cmp.gt',  'cc1.cmp.eq':  'cc1.cmp.eq',  'cc1.cmp.ne':  'cc1.cmp.ne',  'cc1.cmp.z':  'cc1.cmp.z',  'cc1.cmp.nz':  'cc1.cmp.nz',
+        'cc1.icmp.lt': 'cc1.icmp.lt', 'cc1.icmp.le': 'cc1.icmp.le', 'cc1.icmp.ge': 'cc1.icmp.ge', 'cc1.icmp.gt': 'cc1.icmp.gt', 'cc1.icmp.eq': 'cc1.icmp.eq', 'cc1.icmp.ne': 'cc1.icmp.ne', 'cc1.icmp.z': 'cc1.icmp.z', 'cc1.icmp.nz': 'cc1.icmp.nz',
+        'cc2.cmp.lt':  'cc2.cmp.lt',  'cc2.cmp.le':  'cc2.cmp.le',  'cc2.cmp.ge':  'cc2.cmp.ge',  'cc2.cmp.gt':  'cc2.cmp.gt',  'cc2.cmp.eq':  'cc2.cmp.eq',  'cc2.cmp.ne':  'cc2.cmp.ne',  'cc2.cmp.z':  'cc2.cmp.z',  'cc2.cmp.nz':  'cc2.cmp.nz',
+        'cc2.icmp.lt': 'cc2.icmp.lt', 'cc2.icmp.le': 'cc2.icmp.le', 'cc2.icmp.ge': 'cc2.icmp.ge', 'cc2.icmp.gt': 'cc2.icmp.gt', 'cc2.icmp.eq': 'cc2.icmp.eq', 'cc2.icmp.ne': 'cc2.icmp.ne', 'cc2.icmp.z': 'cc2.icmp.z', 'cc2.icmp.nz': 'cc2.icmp.nz',
+        'cc3.cmp.lt':  'cc3.cmp.lt',  'cc3.cmp.le':  'cc3.cmp.le',  'cc3.cmp.ge':  'cc3.cmp.ge',  'cc3.cmp.gt':  'cc3.cmp.gt',  'cc3.cmp.eq':  'cc3.cmp.eq',  'cc3.cmp.ne':  'cc3.cmp.ne',  'cc3.cmp.z':  'cc3.cmp.z',  'cc3.cmp.nz':  'cc3.cmp.nz',
+        'cc3.icmp.lt': 'cc3.icmp.lt', 'cc3.icmp.le': 'cc3.icmp.le', 'cc3.icmp.ge': 'cc3.icmp.ge', 'cc3.icmp.gt': 'cc3.icmp.gt', 'cc3.icmp.eq': 'cc3.icmp.eq', 'cc3.icmp.ne': 'cc3.icmp.ne', 'cc3.icmp.z': 'cc3.icmp.z', 'cc3.icmp.nz': 'cc3.icmp.nz',
+    }
     flag_write_types = {
-        'none', '3',
-        '0lt', '0le', '0ge', '0gt', '0eq', '0ne', '0nz', '0z',
-        '1lt', '1le', '1ge', '1gt', '1eq', '1ne', '1nz', '1z',
-        '2lt', '2le', '2ge', '2gt', '2eq', '2ne', '2nz', '2z',
-        '3lt', '3le', '3ge', '3gt', '3eq', '3ne', '3nz', '3z',
-        '0ilt', '0ile', '0ige', '0igt', '0ieq', '0ine', '0inz', '0iz',
-        '1ilt', '1ile', '1ige', '1igt', '1ieq', '1ine', '1inz', '1iz',
-        '2ilt', '2ile', '2ige', '2igt', '2ieq', '2ine', '2inz', '2iz',
-        '3ilt', '3ile', '3ige', '3igt', '3ieq', '3ine', '3inz', '3iz',
+        'none',
+        'cc0.cmp.lt',  'cc0.cmp.le',  'cc0.cmp.ge',  'cc0.cmp.gt',  'cc0.cmp.eq',  'cc0.cmp.ne',  'cc0.cmp.z',  'cc0.cmp.nz',
+        'cc0.icmp.lt', 'cc0.icmp.le', 'cc0.icmp.ge', 'cc0.icmp.gt', 'cc0.icmp.eq', 'cc0.icmp.ne', 'cc0.icmp.z', 'cc0.icmp.nz',
+        'cc1.cmp.lt',  'cc1.cmp.le',  'cc1.cmp.ge',  'cc1.cmp.gt',  'cc1.cmp.eq',  'cc1.cmp.ne',  'cc1.cmp.z',  'cc1.cmp.nz',
+        'cc1.icmp.lt', 'cc1.icmp.le', 'cc1.icmp.ge', 'cc1.icmp.gt', 'cc1.icmp.eq', 'cc1.icmp.ne', 'cc1.icmp.z', 'cc1.icmp.nz',
+        'cc2.cmp.lt',  'cc2.cmp.le',  'cc2.cmp.ge',  'cc2.cmp.gt',  'cc2.cmp.eq',  'cc2.cmp.ne',  'cc2.cmp.z',  'cc2.cmp.nz',
+        'cc2.icmp.lt', 'cc2.icmp.le', 'cc2.icmp.ge', 'cc2.icmp.gt', 'cc2.icmp.eq', 'cc2.icmp.ne', 'cc2.icmp.z', 'cc2.icmp.nz',
+        'cc3.cmp.lt',  'cc3.cmp.le',  'cc3.cmp.ge',  'cc3.cmp.gt',  'cc3.cmp.eq',  'cc3.cmp.ne',  'cc3.cmp.z',  'cc3.cmp.nz',
+        'cc3.icmp.lt', 'cc3.icmp.le', 'cc3.icmp.ge', 'cc3.icmp.gt', 'cc3.icmp.eq', 'cc3.icmp.ne', 'cc3.icmp.z', 'cc3.icmp.nz',
+        'addx'
     }
     flags_written_by_flag_write_type = {
         'none': {},
-        '3': ['cc3'],
-        '0lt': ['cc0'], '0le': ['cc0'], '0ge': ['cc0'], '0gt': ['cc0'], '0eq': ['cc0'], '0ne': ['cc0'], '0nz': ['cc0'], '0z': ['cc0'],
-        '1lt': ['cc1'], '1le': ['cc1'], '1ge': ['cc1'], '1gt': ['cc1'], '1eq': ['cc1'], '1ne': ['cc1'], '1nz': ['cc1'], '1z': ['cc1'],
-        '2lt': ['cc2'], '2le': ['cc2'], '2ge': ['cc2'], '2gt': ['cc2'], '2eq': ['cc2'], '2ne': ['cc2'], '2nz': ['cc2'], '2z': ['cc2'],
-        '3lt': ['cc3'], '3le': ['cc3'], '3ge': ['cc3'], '3gt': ['cc3'], '3eq': ['cc3'], '3ne': ['cc3'], '3nz': ['cc3'], '3z': ['cc3'],
-        '0ilt': ['cc0'], '0ile': ['cc0'], '0ige': ['cc0'], '0igt': ['cc0'], '0ieq': ['cc0'], '0ine': ['cc0'], '0inz': ['cc0'], '0iz': ['cc0'],
-        '1ilt': ['cc1'], '1ile': ['cc1'], '1ige': ['cc1'], '1igt': ['cc1'], '1ieq': ['cc1'], '1ine': ['cc1'], '1inz': ['cc1'], '1iz': ['cc1'],
-        '2ilt': ['cc2'], '2ile': ['cc2'], '2ige': ['cc2'], '2igt': ['cc2'], '2ieq': ['cc2'], '2ine': ['cc2'], '2inz': ['cc2'], '2iz': ['cc2'],
-        '3ilt': ['cc3'], '3ile': ['cc3'], '3ige': ['cc3'], '3igt': ['cc3'], '3ieq': ['cc3'], '3ine': ['cc3'], '3inz': ['cc3'], '3iz': ['cc3'],
+        'cc0.cmp.lt' : ['cc0'],  'cc0.cmp.le' : ['cc0'],  'cc0.cmp.ge' : ['cc0'],  'cc0.cmp.gt' : ['cc0'],  'cc0.cmp.eq' : ['cc0'],  'cc0.cmp.ne' : ['cc0'],  'cc0.cmp.z' : ['cc0'],  'cc0.cmp.nz' : ['cc0'],
+        'cc0.icmp.lt' : ['cc0'], 'cc0.icmp.le' : ['cc0'], 'cc0.icmp.ge' : ['cc0'], 'cc0.icmp.gt' : ['cc0'], 'cc0.icmp.eq' : ['cc0'], 'cc0.icmp.ne' : ['cc0'], 'cc0.icmp.z' : ['cc0'], 'cc0.icmp.nz' : ['cc0'],
+        'cc1.cmp.lt' : ['cc1'],  'cc1.cmp.le' : ['cc1'],  'cc1.cmp.ge' : ['cc1'],  'cc1.cmp.gt' : ['cc1'],  'cc1.cmp.eq' : ['cc1'],  'cc1.cmp.ne' : ['cc1'],  'cc1.cmp.z' : ['cc1'],  'cc1.cmp.nz' : ['cc1'],
+        'cc1.icmp.lt' : ['cc1'], 'cc1.icmp.le' : ['cc1'], 'cc1.icmp.ge' : ['cc1'], 'cc1.icmp.gt' : ['cc1'], 'cc1.icmp.eq' : ['cc1'], 'cc1.icmp.ne' : ['cc1'], 'cc1.icmp.z' : ['cc1'], 'cc1.icmp.nz' : ['cc1'],
+        'cc2.cmp.lt' : ['cc2'],  'cc2.cmp.le' : ['cc2'],  'cc2.cmp.ge' : ['cc2'],  'cc2.cmp.gt' : ['cc2'],  'cc2.cmp.eq' : ['cc2'],  'cc2.cmp.ne' : ['cc2'],  'cc2.cmp.z' : ['cc2'],  'cc2.cmp.nz' : ['cc2'],
+        'cc2.icmp.lt' : ['cc2'], 'cc2.icmp.le' : ['cc2'], 'cc2.icmp.ge' : ['cc2'], 'cc2.icmp.gt' : ['cc2'], 'cc2.icmp.eq' : ['cc2'], 'cc2.icmp.ne' : ['cc2'], 'cc2.icmp.z' : ['cc2'], 'cc2.icmp.nz' : ['cc2'],
+        'cc3.cmp.lt' : ['cc3'],  'cc3.cmp.le' : ['cc3'],  'cc3.cmp.ge' : ['cc3'],  'cc3.cmp.gt' : ['cc3'],  'cc3.cmp.eq' : ['cc3'],  'cc3.cmp.ne' : ['cc3'],  'cc3.cmp.z' : ['cc3'],  'cc3.cmp.nz' : ['cc3'],
+        'cc3.icmp.lt' : ['cc3'], 'cc3.icmp.le' : ['cc3'], 'cc3.icmp.ge' : ['cc3'], 'cc3.icmp.gt' : ['cc3'], 'cc3.icmp.eq' : ['cc3'], 'cc3.icmp.ne' : ['cc3'], 'cc3.icmp.z' : ['cc3'], 'cc3.icmp.nz' : ['cc3'],
+        'addx': ['cc3']
     }
     stack_pointer = 'sp'
     link_reg = 'lr'
@@ -737,7 +828,7 @@ class QuarkArch(Architecture):
             if info.cond & 1:
                 il.append(
                     il.if_expr(
-                        il.flag(f"cc{(info.cond >> 1) & 3}"),
+                        il.flag_group(f"cc{(info.cond >> 1) & 3}"),
                         before,
                         after
                     )
@@ -745,7 +836,7 @@ class QuarkArch(Architecture):
             else:
                 il.append(
                     il.if_expr(
-                        il.not_expr(0, il.flag(f"cc{(info.cond >> 1) & 3}")),
+                        il.not_expr(0, il.flag_group(f"cc{(info.cond >> 1) & 3}")),
                         before,
                         after
                     )
@@ -972,42 +1063,42 @@ class QuarkArch(Architecture):
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}lt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.lt"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}le"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.le"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ge"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.ge"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}gt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.gt"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}eq"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.eq"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ne"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.ne"))
                     case QuarkCompareOpcode.nz:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}nz"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.nz"))
                     case QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}z"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.z"))
                     case _:
                         il.append(il.unimplemented())
             case QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ilt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.lt"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ile"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.le"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ige"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.ge"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}igt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.gt"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ieq"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.eq"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"{info.b >> 3}ine"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.ne"))
                     case QuarkCompareOpcode.nz:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}inz"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.nz"))
                     case QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"{info.b >> 3}iz"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.z"))
                     case _:
                         il.append(il.unimplemented())
             case _:
@@ -1046,97 +1137,31 @@ class QuarkArch(Architecture):
                 assert False, "Not handled"
 
         match write_type:
-            case '0lt' | '1lt' | '2lt' | '3lt':
-                assert len(operands) == 2
-                return il.compare_unsigned_less_than(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0ilt' | '1ilt' | '2ilt' | '3ilt':
-                assert len(operands) == 2
-                return il.compare_signed_less_than(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0le' | '1le' | '2le' | '3le':
-                assert len(operands) == 2
-                return il.compare_unsigned_less_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0ile' | '1ile' | '2ile' | '3ile':
-                assert len(operands) == 2
-                return il.compare_signed_less_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0gt' | '1gt' | '2gt' | '3gt':
-                assert len(operands) == 2
-                return il.compare_unsigned_greater_than(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0igt' | '1igt' | '2igt' | '3igt':
-                assert len(operands) == 2
-                return il.compare_signed_greater_than(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0ge' | '1ge' | '2ge' | '3ge':
-                assert len(operands) == 2
-                return il.compare_unsigned_greater_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0ige' | '1ige' | '2ige' | '3ige':
-                assert len(operands) == 2
-                return il.compare_signed_greater_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0eq' | '1eq' | '2eq' | '3eq' | '0ieq' | '1ieq' | '2ieq' | '3ieq':
-                assert len(operands) == 2
-                return il.compare_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0ne' | '1ne' | '2ne' | '3ne' | '0ine' | '1ine' | '2ine' | '3ine':
-                assert len(operands) == 2
+            case 'cc0.cmp.nz' | 'cc0.icmp.nz' | \
+                 'cc1.cmp.nz' | 'cc1.icmp.nz' | \
+                 'cc2.cmp.nz' | 'cc2.icmp.nz' | \
+                 'cc3.cmp.nz' | 'cc3.icmp.nz':
                 return il.compare_not_equal(
-                    size,
-                    get_expr_for_register_or_constant(size, operands[0]),
-                    get_expr_for_register_or_constant(size, operands[1])
-                )
-            case '0nz' | '1nz' | '2nz' | '3nz' | '0inz' | '1inz' | '2inz' | '3inz':
-                assert len(operands) == 2
-                return il.compare_not_equal(
-                    size,
+                    4,
                     il.and_expr(
-                        size,
-                        get_expr_for_register_or_constant(size, operands[0]),
-                        get_expr_for_register_or_constant(size, operands[1])
+                        4,
+                        get_expr_for_register_or_constant(4, operands[0]),
+                        get_expr_for_register_or_constant(4, operands[1])
                     ),
-                    il.const(size, 0)
+                    il.const(4, 0)
                 )
-            case '0z' | '1z' | '2z' | '3z' | '0iz' | '1iz' | '2iz' | '3iz':
-                assert len(operands) == 2
+            case 'cc0.cmp.z' | 'cc0.icmp.z' | \
+                 'cc1.cmp.z' | 'cc1.icmp.z' | \
+                 'cc2.cmp.z' | 'cc2.icmp.z' | \
+                 'cc3.cmp.z' | 'cc3.icmp.z':
                 return il.compare_equal(
-                    size,
+                    4,
                     il.and_expr(
-                        size,
-                        get_expr_for_register_or_constant(size, operands[0]),
-                        get_expr_for_register_or_constant(size, operands[1])
+                        4,
+                        get_expr_for_register_or_constant(4, operands[0]),
+                        get_expr_for_register_or_constant(4, operands[1])
                     ),
-                    il.const(size, 0)
+                    il.const(4, 0)
                 )
             case '3':
                 if op == LowLevelILOperation.LLIL_ADC:
@@ -1168,6 +1193,21 @@ class QuarkArch(Architecture):
                     )
 
         return il.unimplemented()
+
+    def get_semantic_flag_group_low_level_il(
+        self, sem_group: Optional[SemanticGroupType], il: 'lowlevelil.LowLevelILFunction'
+    ) -> 'lowlevelil.ExpressionIndex':
+        match sem_group:
+            case 'cc0':
+                return il.flag('cc0')
+            case 'cc1':
+                return il.flag('cc1')
+            case 'cc2':
+                return il.flag('cc2')
+            case 'cc3':
+                return il.flag('cc3')
+            case _:
+                return il.unimplemented()
 
     def convert_to_nop(self, data: bytes, addr: int = 0) -> Optional[bytes]:
         return b'\x00\x00\xc0\x17' * (len(data) // 4)
