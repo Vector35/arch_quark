@@ -1034,9 +1034,9 @@ class QuarkArch(Architecture):
             case QuarkOpcode.sub:
                 il.append(il.set_reg(4, ra(), il.sub(4, rb_expr(), cval())))
             case QuarkOpcode.addx:
-                il.append(il.set_reg(4, ra(), il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='3')))
+                il.append(il.set_reg(4, ra(), il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
             case QuarkOpcode.subx:
-                il.append(il.set_reg(4, ra(), il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='3')))
+                il.append(il.set_reg(4, ra(), il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
             case QuarkOpcode.mulx:
                 il.append(il.set_reg_split(4, rd(), ra(), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
             case QuarkOpcode.imulx:
@@ -1240,7 +1240,7 @@ class QuarkArch(Architecture):
                     ),
                     il.const(4, 0)
                 )
-            case '3':
+            case 'addx':
                 if op == LowLevelILOperation.LLIL_ADC:
                     # ((first + second + carry) >> 32) & 1
                     return il.compare_unsigned_greater_equal(
