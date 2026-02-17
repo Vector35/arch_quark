@@ -567,6 +567,7 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False, signed=True),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                 ])
             case QuarkOpcode.ldi:
@@ -602,6 +603,7 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "["),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
+                    *cval_tokens(plus=True, zero=False, signed=True),
                     InstructionTextToken(InstructionTextTokenType.BraceToken, "]"),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
@@ -663,6 +665,8 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.b)),
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                    *cval_tokens(plus=False, zero=True, signed=True),
+                    InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, 'cc3'),
                 ])
             case QuarkOpcode.mulx | QuarkOpcode.imulx:
@@ -694,9 +698,17 @@ class QuarkArch(Architecture):
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                             *cval_tokens(plus=False, zero=False, signed=True),
                         ])
-                    case QuarkIntegerOpcode.xchg | QuarkIntegerOpcode.sxb | QuarkIntegerOpcode.sxh | QuarkIntegerOpcode.swaph | QuarkIntegerOpcode.swapw | QuarkIntegerOpcode.neg | QuarkIntegerOpcode.not_ | QuarkIntegerOpcode.zxb | QuarkIntegerOpcode.zxh:
+                    case QuarkIntegerOpcode.xchg | QuarkIntegerOpcode.sxb | QuarkIntegerOpcode.sxh | QuarkIntegerOpcode.swaph | QuarkIntegerOpcode.swapw | QuarkIntegerOpcode.neg | QuarkIntegerOpcode.zxb | QuarkIntegerOpcode.zxh:
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, int_op.name),
+                            InstructionTextToken(InstructionTextTokenType.TextToken, " "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
+                            InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
+                            InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
+                        ])
+                    case QuarkIntegerOpcode.not_:
+                        tokens.extend([
+                            InstructionTextToken(InstructionTextTokenType.InstructionToken, "not"),
                             InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                             InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.a)),
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
