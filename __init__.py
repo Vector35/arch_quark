@@ -1284,7 +1284,9 @@ class QuarkArch(Architecture):
         return b'\x00\x00\xc0\x17' * (len(data) // 4)
 
     def is_never_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
-        return False
+        if len(data) != 4:
+            return False
+        return True
 
     def is_always_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
         return False
@@ -1297,6 +1299,15 @@ class QuarkArch(Architecture):
 
     def is_skip_and_return_value_patch_available(self, data: bytes, addr: int = 0) -> bool:
         return False
+
+    def always_branch(self, data: bytes, addr: int = 0) -> Optional[bytes]:
+        return None
+
+    def invert_branch(self, data: bytes, addr: int = 0) -> Optional[bytes]:
+        return None
+
+    def skip_and_return_value(self, data: bytes, addr: int, value: int) -> Optional[bytes]:
+        return None
 
     def can_assemble(self) -> bool:
         return True
