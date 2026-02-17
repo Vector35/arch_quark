@@ -1279,28 +1279,53 @@ class QuarkArch(Architecture):
     def is_never_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
         if len(data) != 4:
             return False
-        return True
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        return info.cond != 0
 
     def is_always_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
-        return False
+        if len(data) != 4:
+            return False
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        return info.cond != 0
 
     def is_invert_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
-        return False
+        if len(data) != 4:
+            return False
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        return info.cond != 0
 
     def is_skip_and_return_zero_patch_available(self, data: bytes, addr: int = 0) -> bool:
-        return False
+        if len(data) != 4:
+            return False
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        return info.op == QuarkOpcode.call or (info.op == QuarkOpcode.integer_group and info.b == QuarkIntegerOpcode.call)
 
     def is_skip_and_return_value_patch_available(self, data: bytes, addr: int = 0) -> bool:
-        return False
+        if len(data) != 4:
+            return False
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        return info.op == QuarkOpcode.call or (info.op == QuarkOpcode.integer_group and info.b == QuarkIntegerOpcode.call)
 
     def always_branch(self, data: bytes, addr: int = 0) -> Optional[bytes]:
-        return None
+        if len(data) != 4:
+            return None
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        info.cond = 0
+        return info.instr.to_bytes(4, "little")
 
     def invert_branch(self, data: bytes, addr: int = 0) -> Optional[bytes]:
-        return None
+        if len(data) != 4:
+            return None
+        info = QuarkInstruction(int.from_bytes(data, 'little'))
+        info.cond = info.cond ^ 1
+        return info.instr.to_bytes(4, "little")
 
     def skip_and_return_value(self, data: bytes, addr: int, value: int) -> Optional[bytes]:
-        return None
+        info = QuarkInstruction(0)
+        info.op = QuarkOpcode.ldi
+        info.a = 1  # return reg is normally r1
+        info.imm17 = value
+        return info.instr.to_bytes(4, "little")
 
     def can_assemble(self) -> bool:
         return True
