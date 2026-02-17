@@ -1,5 +1,6 @@
 import enum
 import json
+import math
 from pathlib import Path
 from typing import Optional, Tuple, List
 
@@ -140,29 +141,56 @@ class QuarkInstruction:
     def __init__(self, instr: int):
         self.instr = instr
 
+    def __repr__(self):
+        return f"QuarkInstruction({self.cond=} {self.op=} {self.a=} {self.b=} {self.c=} {self.d=} {self.imm5=} {self.imm11=} {self.imm17=} {self.imm22=} {self.immhi=} {self.smallimm=} {self.largeimm=})"
+
     @property
     def cond(self):
         return self.instr >> 28
+
+    @cond.setter
+    def cond(self, cond):
+        self.instr = (self.instr & 0b0000_1111_1111_1111_1111_1111_1111_1111) | ((cond & 0xf) << 28)
 
     @property
     def op(self):
         return (self.instr >> 22) & 0x3f
 
+    @op.setter
+    def op(self, op):
+        self.instr = (self.instr & 0b1111_0000_0011_1111_1111_1111_1111_1111) | ((op & 0x3f) << 22)
+
     @property
     def a(self):
-        return (self.instr >> 17) & 31
+        return (self.instr >> 17) & 0x1f
+
+    @a.setter
+    def a(self, a):
+        self.instr = (self.instr & 0b1111_1111_1100_0001_1111_1111_1111_1111) | ((a & 0x1f) << 17)
 
     @property
     def b(self):
-        return (self.instr >> 12) & 31
+        return (self.instr >> 12) & 0x1f
+
+    @b.setter
+    def b(self, b):
+        self.instr = (self.instr & 0b1111_1111_1111_1110_0000_1111_1111_1111) | ((b & 0x1f) << 12)
 
     @property
     def c(self):
-        return (self.instr >> 5) & 31
+        return (self.instr >> 5) & 0x1f
+
+    @c.setter
+    def c(self, c):
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_1100_0001_1111) | ((c & 0x1f) << 5)
 
     @property
     def d(self):
-        return self.instr & 31
+        return self.instr & 0x1f
+
+    @d.setter
+    def d(self, d):
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_1111_1110_0000) | (d & 0x1f)
 
     @property
     def imm5(self):
@@ -170,11 +198,24 @@ class QuarkInstruction:
             return (self.instr & 0x1f) | 0xffffffe0
         return self.instr & 0x1f
 
+    @imm5.setter
+    def imm5(self, imm5):
+        if imm5 < 0:
+            # 2s complement with 32 bit
+            imm5 = 0x100000000 + imm5
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_1111_1110_0000) | (imm5 & 0x1f)
+
     @property
     def imm11(self):
         if self.instr & 0x400:
             return (self.instr & 0x7ff) | 0xfffff800
         return self.instr & 0x7ff
+
+    @imm11.setter
+    def imm11(self, imm11):
+        if imm11 < 0:
+            imm11 = 0x100000000 + imm11
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_1000_0000_0000) | (imm11 & 0x7ff)
 
     @property
     def imm17(self):
@@ -182,23 +223,47 @@ class QuarkInstruction:
             return (self.instr & 0x1ffff) | 0xfffe0000
         return self.instr & 0x1ffff
 
+    @imm17.setter
+    def imm17(self, imm17):
+        if imm17 < 0:
+            imm17 = 0x100000000 + imm17
+        self.instr = (self.instr & 0b1111_1111_1111_1110_0000_0000_0000_0000) | (imm17 & 0x1ffff)
+
     @property
     def imm22(self):
         if self.instr & 0x200000:
             return (self.instr & 0x3fffff) | 0xffc00000
         return self.instr & 0x3fffff
 
+    @imm22.setter
+    def imm22(self, imm22):
+        if imm22 < 0:
+            imm22 = 0x100000000 + imm22
+        self.instr = (self.instr & 0b1111_1111_1100_0000_0000_0000_0000_0000) | (imm22 & 0x3fffff)
+
     @property
     def immhi(self):
         return (self.instr & 0xffff) << 16
 
+    @immhi.setter
+    def immhi(self, immhi):
+        self.instr = (self.instr & 0b1111_1111_1111_1111_0000_0000_0000_0000) | ((immhi & 0xffff0000) >> 16)
+
     @property
     def smallimm(self):
-        return self.instr & 0x400
+        return True if self.instr & 0x400 else False
+
+    @smallimm.setter
+    def smallimm(self, smallimm):
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_1011_1111_1111) | (0x400 if smallimm else 0)
 
     @property
     def largeimm(self):
-        return self.instr & 0x800
+        return True if self.instr & 0x800 else False
+
+    @largeimm.setter
+    def largeimm(self, largeimm):
+        self.instr = (self.instr & 0b1111_1111_1111_1111_1111_0111_1111_1111) | (0x800 if largeimm else 0)
 
 
 class QuarkArch(Architecture):
@@ -1238,6 +1303,378 @@ class QuarkArch(Architecture):
 
     def is_skip_and_return_value_patch_available(self, data: bytes, addr: int = 0) -> bool:
         return False
+
+    def can_assemble(self) -> bool:
+        return True
+
+    def assemble(self, code: str, addr: int = 0) -> bytes:
+        if isinstance(code, bytes):  # Fixed in >= 5.3
+            code = code.decode("utf-8")
+        result = b""
+        for i, line in enumerate(code.splitlines()):
+            if '#' in line:
+                line = line[:line.index('#')]
+            # tokenize
+            tokens = ['']
+            for ch in line:
+                if ch.isspace():
+                    if len(tokens[-1]) > 0:
+                        tokens.append('')
+                    continue
+                if not ch.isalnum() and not ch in "_":
+                    if len(tokens[-1]) > 0:
+                        tokens.append('')
+                tokens[-1] += ch
+                if not ch.isalnum() and not ch in "_":
+                    if len(tokens[-1]) > 0:
+                        tokens.append('')
+            if tokens[-1] == '':
+                tokens.pop()
+
+            def to_int(x):
+                try:
+                    return int(x, 0) if x.startswith('0x') else int(x)
+                except:
+                    return None
+
+            def to_reg(r):
+                match r:
+                    case "sp":
+                        return 0
+                    case "lr":
+                        return 30
+                    case "ip":
+                        return 31
+                    case reg if reg.startswith("r"):
+                        return int(reg[1:])
+                    case _:
+                        return None
+
+            def to_flag(f):
+                match f:
+                    case "cc0":
+                        return 0
+                    case "cc1":
+                        return 1
+                    case "cc2":
+                        return 2
+                    case "cc3":
+                        return 3
+                    case _:
+                        return None
+
+            def to_cval(rest):
+                #   0
+                # + 1
+                # - 1
+                #   r0
+                # + r0
+                #   r0 + 1
+                # + r0 + 1
+                #   r0 - 1
+                # + r0 - 1
+                #   r0 * 4
+                # + r0 * 4
+                #   r0 * 4 + 1
+                # + r0 * 4 + 1
+                #   r0 * 4 - 1
+                # + r0 * 4 - 1
+
+                match rest:
+                    case [x] if (i := to_int(x)) is not None:
+                        return (None, i, None)
+                    case ["+", x] if (i := to_int(x)) is not None:
+                        return (None, i, None)
+                    case ["-", x] if (i := to_int(x)) is not None:
+                        return (None, -i, None)
+                    case [r] if (reg := to_reg(r)) is not None:
+                        return (reg, None, None)
+                    case ["+", r] if (reg := to_reg(r)) is not None:
+                        return (reg, None, None)
+                    case [r, '+', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, i, None)
+                    case ["+", r, '+', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, i, None)
+                    case [r, '-', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, -i, None)
+                    case ["+", r, '-', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, -i, None)
+                    case [r, '*', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, None, i)
+                    case ["+", r, '*', x] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None:
+                        return (reg, None, i)
+                    case [r, '*', x, '+', y] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None and (i := to_int(y)) is not None:
+                        return (reg, int(y, 0), i)
+                    case ["+", r, '*', x, '+', y] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None and (i := to_int(y)) is not None:
+                        return (reg, int(y, 0), i)
+                    case [r, '*', x, '-', y] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None and (i := to_int(y)) is not None:
+                        return (reg, -int(y, 0), i)
+                    case ["+", r, '*', x, '-', y] if (reg := to_reg(r)) is not None and (i := to_int(x)) is not None and (i := to_int(y)) is not None:
+                        return (reg, -int(y, 0), i)
+                    case _:
+                        return (None, None, None)
+
+            def assign_cval(i: QuarkInstruction, cval: Tuple[Optional[int], Optional[int], Optional[int]]):
+                if cval[0] is None:
+                    if cval[1] is None:
+                        # [ ] case
+                        i.smallimm = False
+                        i.largeimm = True
+                        i.imm11 = 0
+                        return
+                    # [ + const ] case
+                    # not sure why we would ever use the imm5 case
+                    i.smallimm = False
+                    i.largeimm = True
+                    i.imm11 = cval[1]
+                else:
+                    # [ + r ] case
+                    i.largeimm = False
+                    i.smallimm = False
+                    i.c = cval[0]
+                    if cval[2] is None:
+                        i.d = 0
+                    else:
+                        # [ + r * mult ] case
+                        i.d = math.floor(math.log2(cval[2]))
+
+            i = QuarkInstruction(0)
+            match tokens:
+                case ["skip", *_]:
+                    i.cond = 1
+                    tokens.pop(0)
+                case ["if", flag, *_] if (flag := to_flag(flag)) is not None:
+                    i.cond = 8 | 1 | (flag << 1)
+                    tokens.pop(0)
+                    tokens.pop(0)
+                case ["if", "!", flag, *_] if (flag := to_flag(flag)) is not None:
+                    i.cond = 8 | (flag << 1)
+                    tokens.pop(0)
+                    tokens.pop(0)
+                    tokens.pop(0)
+
+            match tokens:
+                case [insn, ra, ",", "[", rb, *rest, "]"] if \
+                        insn in ["ldb", "ldh", "ldw", "ldbu", "ldhu", "ldwu", "ldsxb", "ldsxh", "ldsxbu", "ldsxhu"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "ldb": i.op = QuarkOpcode.ldb
+                        case "ldh": i.op = QuarkOpcode.ldh
+                        case "ldw": i.op = QuarkOpcode.ldw
+                        case "ldbu": i.op = QuarkOpcode.ldbu
+                        case "ldhu": i.op = QuarkOpcode.ldhu
+                        case "ldwu": i.op = QuarkOpcode.ldwu
+                        case "ldsxb": i.op = QuarkOpcode.ldsxb
+                        case "ldsxh": i.op = QuarkOpcode.ldsxh
+                        case "ldsxbu": i.op = QuarkOpcode.ldsxbu
+                        case "ldsxhu": i.op = QuarkOpcode.ldsxhu
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case [insn, ra, ".", ".", "lr", ",", "[", rb, *rest, "]"] if \
+                        insn in ["ldmw", "ldmwu"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "ldmw": i.op = QuarkOpcode.ldmw
+                        case "ldmwu": i.op = QuarkOpcode.ldmwu
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case ["ldi", ra, ",", imm] if \
+                        (ra := to_reg(ra)) is not None \
+                        and (imm := to_int(imm)) is not None:
+                    i.op = QuarkOpcode.ldi
+                    i.a = ra
+                    i.imm17 = imm
+                case ["ldih", ra, ",", imm] if \
+                        (ra := to_reg(ra)) is not None \
+                        and (imm := to_int(imm)) is not None:
+                    i.op = QuarkOpcode.ldih
+                    i.a = ra
+                    i.immhi = imm
+                case [insn, "[", rb, *rest, "]", ",", ra] if \
+                        insn in ["stb", "sth", "stw", "stbu", "sthu", "stwu"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "stb": i.op = QuarkOpcode.stb
+                        case "sth": i.op = QuarkOpcode.sth
+                        case "stw": i.op = QuarkOpcode.stw
+                        case "stbu": i.op = QuarkOpcode.stbu
+                        case "sthu": i.op = QuarkOpcode.sthu
+                        case "stwu": i.op = QuarkOpcode.stwu
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case [insn, "[", rb, *rest, "]", ",", ra, ".", ".", "lr"] if \
+                        insn in ["stmw", "stmwu"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "stmw": i.op = QuarkOpcode.stmw
+                        case "stmwu": i.op = QuarkOpcode.stmwu
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case [insn, dest] if \
+                        insn in ["jmp", "call"] \
+                        and (dest := to_int(dest)) is not None:
+                    match insn:
+                        case "jmp": i.op = QuarkOpcode.jmp
+                        case "call": i.op = QuarkOpcode.call
+                    i.imm22 = (dest - addr - 4) >> 2
+                case [insn, ra, ",", rb, ",", *rest] if \
+                    insn in ["add", "sub", "mul", "div", "idiv", "mod", "imod", "xor", "sar", "shl", "shr", "rol", "ror", "and", "or"] \
+                    and (ra := to_reg(ra)) is not None \
+                    and (rb := to_reg(rb)) is not None \
+                    and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "add": i.op = QuarkOpcode.add
+                        case "sub": i.op = QuarkOpcode.sub
+                        case "mul": i.op = QuarkOpcode.mul
+                        case "div": i.op = QuarkOpcode.div
+                        case "idiv": i.op = QuarkOpcode.idiv
+                        case "mod": i.op = QuarkOpcode.mod
+                        case "imod": i.op = QuarkOpcode.imod
+                        case "xor": i.op = QuarkOpcode.xor
+                        case "sar": i.op = QuarkOpcode.sar
+                        case "shl": i.op = QuarkOpcode.shl
+                        case "shr": i.op = QuarkOpcode.shr
+                        case "rol": i.op = QuarkOpcode.rol
+                        case "ror": i.op = QuarkOpcode.ror
+                        case "and": i.op = QuarkOpcode.and_
+                        case "or": i.op = QuarkOpcode.or_
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case [insn, ra, ",", rb, ",", *rest, ",", "cc3"] if \
+                        insn in ["addx", "subx"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "addx": i.op = QuarkOpcode.addx
+                        case "subx": i.op = QuarkOpcode.subx
+                    i.a = ra
+                    i.b = rb
+                    assign_cval(i, cval)
+                case [insn, rd, ":", ra, ",", rb, ",", rc] if \
+                        insn in ["mulx", "imulx"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rb := to_reg(rb)) is not None \
+                        and (rc := to_reg(rc)) is not None \
+                        and (rd := to_reg(rd)) is not None:
+                    match insn:
+                        case "mulx": i.op = QuarkOpcode.mulx
+                        case "imulx": i.op = QuarkOpcode.imulx
+                    i.a = ra
+                    i.b = rb
+                    i.c = rc
+                    i.d = rd
+                case ["syscall", num] if \
+                        (num := to_int(num)) is not None:
+                    i.op = QuarkOpcode.syscall
+                    i.imm22 = num
+                case ["mov", ra, ",", *rest] if \
+                        (ra := to_reg(ra)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    i.b = QuarkIntegerOpcode.mov
+                    i.a = ra
+                    assign_cval(i, cval)
+                case [insn, ra, ",", rc] if \
+                        insn in ["xchg", "sxb", "sxh", "swaph", "swapw", "neg", "not", "zxb", "zxh"] \
+                        and (ra := to_reg(ra)) is not None \
+                        and (rc := to_reg(rc)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    match insn:
+                        case "xchg": i.b = QuarkIntegerOpcode.xchg
+                        case "sxb": i.b = QuarkIntegerOpcode.sxb
+                        case "sxh": i.b = QuarkIntegerOpcode.sxh
+                        case "swaph": i.b = QuarkIntegerOpcode.swaph
+                        case "swapw": i.b = QuarkIntegerOpcode.swapw
+                        case "neg": i.b = QuarkIntegerOpcode.neg
+                        case "not": i.b = QuarkIntegerOpcode.not_
+                        case "zxb": i.b = QuarkIntegerOpcode.zxb
+                        case "zxh": i.b = QuarkIntegerOpcode.zxh
+                    i.a = ra
+                    i.c = rc
+                case [insn, ra] if \
+                        insn in ["call", "syscall", "ldcr", "stcr"] \
+                        and (ra := to_reg(ra)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    match insn:
+                        case "call": i.b = QuarkIntegerOpcode.call
+                        case "syscall": i.b = QuarkIntegerOpcode.syscall
+                        case "ldcr": i.b = QuarkIntegerOpcode.ldcr
+                        case "stcr": i.b = QuarkIntegerOpcode.stcr
+                    i.a = ra
+                case [insn, fa] if \
+                        insn in ["setcc", "clrcc"] \
+                        and (fa := to_flag(fa)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    match insn:
+                        case "setcc": i.b = QuarkIntegerOpcode.setcc
+                        case "clrcc": i.b = QuarkIntegerOpcode.clrcc
+                    i.a = fa
+                case [insn, fa, ",", fc] if \
+                        insn in ["notcc", "movcc"] \
+                        and (fa := to_flag(fa)) is not None \
+                        and (fc := to_flag(fc)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    match insn:
+                        case "notcc": i.b = QuarkIntegerOpcode.notcc
+                        case "movcc": i.b = QuarkIntegerOpcode.movcc
+                    i.a = fa
+                    i.c = fc
+                case [insn, fa, ",", fc, ",", fd] if \
+                        insn in ["andcc", "orcc", "xorcc"] \
+                        and (fa := to_flag(fa)) is not None \
+                        and (fc := to_flag(fc)) is not None \
+                        and (fd := to_flag(fd)) is not None:
+                    i.op = QuarkOpcode.integer_group
+                    match insn:
+                        case "andcc": i.b = QuarkIntegerOpcode.andcc
+                        case "orcc": i.b = QuarkIntegerOpcode.orcc
+                        case "xorcc": i.b = QuarkIntegerOpcode.xorcc
+                    i.a = fa
+                    i.c = fc
+                    i.d = fd
+                case ["bp"]:
+                    i.op = QuarkOpcode.integer_group
+                    i.b = QuarkIntegerOpcode.bp
+                case [insn, ".", op, ".", fb, ra, ",", *rest] if \
+                        insn in ["cmp", "icmp"] \
+                        and op in ["lt", "le", "ge", "gt", "eq", "ne", "z", "nz"] \
+                        and (fb := to_flag(fb)) is not None \
+                        and (ra := to_reg(ra)) is not None \
+                        and (cval := to_cval(rest)) is not None:
+                    match insn:
+                        case "cmp": i.op = QuarkOpcode.cmp
+                        case "icmp": i.op = QuarkOpcode.icmp
+                    match op:
+                        case "lt": i.b = QuarkCompareOpcode.lt
+                        case "le": i.b = QuarkCompareOpcode.le
+                        case "ge": i.b = QuarkCompareOpcode.ge
+                        case "gt": i.b = QuarkCompareOpcode.gt
+                        case "eq": i.b = QuarkCompareOpcode.eq
+                        case "ne": i.b = QuarkCompareOpcode.ne
+                        case "z": i.b = QuarkCompareOpcode.z
+                        case "nz": i.b = QuarkCompareOpcode.nz
+                    i.b = i.b | (fb << 3)
+                    i.a = ra
+                    assign_cval(i, cval)
+                case _:
+                    raise NotImplemented()
+            result += i.instr.to_bytes(4, "little")
+            addr += 4
+        return result
 
 
 class QuarkCallingConvention(CallingConvention):
