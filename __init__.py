@@ -383,37 +383,37 @@ class QuarkArch(Architecture):
         },
     }
     semantic_class_for_flag_write_type = {
-        'cc0.cmp.lt':  'cmp.lt',  'cc0.cmp.le':  'cmp.le',  'cc0.cmp.ge':  'cmp.ge',  'cc0.cmp.gt':  'cmp.gt',  'cc0.cmp.eq':  'eq', 'cc0.cmp.ne':  'ne', 'cc0.cmp.z':  'z', 'cc0.cmp.nz':  'nz',
-        'cc0.icmp.lt': 'icmp.lt', 'cc0.icmp.le': 'icmp.le', 'cc0.icmp.ge': 'icmp.ge', 'cc0.icmp.gt': 'icmp.gt', 'cc0.icmp.eq': 'eq', 'cc0.icmp.ne': 'ne', 'cc0.icmp.z': 'z', 'cc0.icmp.nz': 'nz',
-        'cc1.cmp.lt':  'cmp.lt',  'cc1.cmp.le':  'cmp.le',  'cc1.cmp.ge':  'cmp.ge',  'cc1.cmp.gt':  'cmp.gt',  'cc1.cmp.eq':  'eq', 'cc1.cmp.ne':  'ne', 'cc1.cmp.z':  'z', 'cc1.cmp.nz':  'nz',
-        'cc1.icmp.lt': 'icmp.lt', 'cc1.icmp.le': 'icmp.le', 'cc1.icmp.ge': 'icmp.ge', 'cc1.icmp.gt': 'icmp.gt', 'cc1.icmp.eq': 'eq', 'cc1.icmp.ne': 'ne', 'cc1.icmp.z': 'z', 'cc1.icmp.nz': 'nz',
-        'cc2.cmp.lt':  'cmp.lt',  'cc2.cmp.le':  'cmp.le',  'cc2.cmp.ge':  'cmp.ge',  'cc2.cmp.gt':  'cmp.gt',  'cc2.cmp.eq':  'eq', 'cc2.cmp.ne':  'ne', 'cc2.cmp.z':  'z', 'cc2.cmp.nz':  'nz',
-        'cc2.icmp.lt': 'icmp.lt', 'cc2.icmp.le': 'icmp.le', 'cc2.icmp.ge': 'icmp.ge', 'cc2.icmp.gt': 'icmp.gt', 'cc2.icmp.eq': 'eq', 'cc2.icmp.ne': 'ne', 'cc2.icmp.z': 'z', 'cc2.icmp.nz': 'nz',
-        'cc3.cmp.lt':  'cmp.lt',  'cc3.cmp.le':  'cmp.le',  'cc3.cmp.ge':  'cmp.ge',  'cc3.cmp.gt':  'cmp.gt',  'cc3.cmp.eq':  'eq', 'cc3.cmp.ne':  'ne', 'cc3.cmp.z':  'z', 'cc3.cmp.nz':  'nz',
-        'cc3.icmp.lt': 'icmp.lt', 'cc3.icmp.le': 'icmp.le', 'cc3.icmp.ge': 'icmp.ge', 'cc3.icmp.gt': 'icmp.gt', 'cc3.icmp.eq': 'eq', 'cc3.icmp.ne': 'ne', 'cc3.icmp.z': 'z', 'cc3.icmp.nz': 'nz',
+        'cmp.lt.cc0':  'cmp.lt',  'cmp.le.cc0':  'cmp.le',  'cmp.ge.cc0':  'cmp.ge',  'cmp.gt.cc0':  'cmp.gt',  'cmp.eq.cc0':  'eq', 'cmp.ne.cc0':  'ne', 'cmp.z.cc0':  'z', 'cmp.nz.cc0':  'nz',
+        'icmp.lt.cc0': 'icmp.lt', 'icmp.le.cc0': 'icmp.le', 'icmp.ge.cc0': 'icmp.ge', 'icmp.gt.cc0': 'icmp.gt', 'icmp.eq.cc0': 'eq', 'icmp.ne.cc0': 'ne', 'icmp.z.cc0': 'z', 'icmp.nz.cc0': 'nz',
+        'cmp.lt.cc1':  'cmp.lt',  'cmp.le.cc1':  'cmp.le',  'cmp.ge.cc1':  'cmp.ge',  'cmp.gt.cc1':  'cmp.gt',  'cmp.eq.cc1':  'eq', 'cmp.ne.cc1':  'ne', 'cmp.z.cc1':  'z', 'cmp.nz.cc1':  'nz',
+        'icmp.lt.cc1': 'icmp.lt', 'icmp.le.cc1': 'icmp.le', 'icmp.ge.cc1': 'icmp.ge', 'icmp.gt.cc1': 'icmp.gt', 'icmp.eq.cc1': 'eq', 'icmp.ne.cc1': 'ne', 'icmp.z.cc1': 'z', 'icmp.nz.cc1': 'nz',
+        'cmp.lt.cc2':  'cmp.lt',  'cmp.le.cc2':  'cmp.le',  'cmp.ge.cc2':  'cmp.ge',  'cmp.gt.cc2':  'cmp.gt',  'cmp.eq.cc2':  'eq', 'cmp.ne.cc2':  'ne', 'cmp.z.cc2':  'z', 'cmp.nz.cc2':  'nz',
+        'icmp.lt.cc2': 'icmp.lt', 'icmp.le.cc2': 'icmp.le', 'icmp.ge.cc2': 'icmp.ge', 'icmp.gt.cc2': 'icmp.gt', 'icmp.eq.cc2': 'eq', 'icmp.ne.cc2': 'ne', 'icmp.z.cc2': 'z', 'icmp.nz.cc2': 'nz',
+        'cmp.lt.cc3':  'cmp.lt',  'cmp.le.cc3':  'cmp.le',  'cmp.ge.cc3':  'cmp.ge',  'cmp.gt.cc3':  'cmp.gt',  'cmp.eq.cc3':  'eq', 'cmp.ne.cc3':  'ne', 'cmp.z.cc3':  'z', 'cmp.nz.cc3':  'nz',
+        'icmp.lt.cc3': 'icmp.lt', 'icmp.le.cc3': 'icmp.le', 'icmp.ge.cc3': 'icmp.ge', 'icmp.gt.cc3': 'icmp.gt', 'icmp.eq.cc3': 'eq', 'icmp.ne.cc3': 'ne', 'icmp.z.cc3': 'z', 'icmp.nz.cc3': 'nz',
     }
     flag_write_types = {
         'none',
-        'cc0.cmp.lt',  'cc0.cmp.le',  'cc0.cmp.ge',  'cc0.cmp.gt',  'cc0.cmp.eq',  'cc0.cmp.ne',  'cc0.cmp.z',  'cc0.cmp.nz',
-        'cc0.icmp.lt', 'cc0.icmp.le', 'cc0.icmp.ge', 'cc0.icmp.gt', 'cc0.icmp.eq', 'cc0.icmp.ne', 'cc0.icmp.z', 'cc0.icmp.nz',
-        'cc1.cmp.lt',  'cc1.cmp.le',  'cc1.cmp.ge',  'cc1.cmp.gt',  'cc1.cmp.eq',  'cc1.cmp.ne',  'cc1.cmp.z',  'cc1.cmp.nz',
-        'cc1.icmp.lt', 'cc1.icmp.le', 'cc1.icmp.ge', 'cc1.icmp.gt', 'cc1.icmp.eq', 'cc1.icmp.ne', 'cc1.icmp.z', 'cc1.icmp.nz',
-        'cc2.cmp.lt',  'cc2.cmp.le',  'cc2.cmp.ge',  'cc2.cmp.gt',  'cc2.cmp.eq',  'cc2.cmp.ne',  'cc2.cmp.z',  'cc2.cmp.nz',
-        'cc2.icmp.lt', 'cc2.icmp.le', 'cc2.icmp.ge', 'cc2.icmp.gt', 'cc2.icmp.eq', 'cc2.icmp.ne', 'cc2.icmp.z', 'cc2.icmp.nz',
-        'cc3.cmp.lt',  'cc3.cmp.le',  'cc3.cmp.ge',  'cc3.cmp.gt',  'cc3.cmp.eq',  'cc3.cmp.ne',  'cc3.cmp.z',  'cc3.cmp.nz',
-        'cc3.icmp.lt', 'cc3.icmp.le', 'cc3.icmp.ge', 'cc3.icmp.gt', 'cc3.icmp.eq', 'cc3.icmp.ne', 'cc3.icmp.z', 'cc3.icmp.nz',
+        'cmp.lt.cc0',  'cmp.le.cc0',  'cmp.ge.cc0',  'cmp.gt.cc0',  'cmp.eq.cc0',  'cmp.ne.cc0',  'cmp.z.cc0',  'cmp.nz.cc0',
+        'icmp.lt.cc0', 'icmp.le.cc0', 'icmp.ge.cc0', 'icmp.gt.cc0', 'icmp.eq.cc0', 'icmp.ne.cc0', 'icmp.z.cc0', 'icmp.nz.cc0',
+        'cmp.lt.cc1',  'cmp.le.cc1',  'cmp.ge.cc1',  'cmp.gt.cc1',  'cmp.eq.cc1',  'cmp.ne.cc1',  'cmp.z.cc1',  'cmp.nz.cc1',
+        'icmp.lt.cc1', 'icmp.le.cc1', 'icmp.ge.cc1', 'icmp.gt.cc1', 'icmp.eq.cc1', 'icmp.ne.cc1', 'icmp.z.cc1', 'icmp.nz.cc1',
+        'cmp.lt.cc2',  'cmp.le.cc2',  'cmp.ge.cc2',  'cmp.gt.cc2',  'cmp.eq.cc2',  'cmp.ne.cc2',  'cmp.z.cc2',  'cmp.nz.cc2',
+        'icmp.lt.cc2', 'icmp.le.cc2', 'icmp.ge.cc2', 'icmp.gt.cc2', 'icmp.eq.cc2', 'icmp.ne.cc2', 'icmp.z.cc2', 'icmp.nz.cc2',
+        'cmp.lt.cc3',  'cmp.le.cc3',  'cmp.ge.cc3',  'cmp.gt.cc3',  'cmp.eq.cc3',  'cmp.ne.cc3',  'cmp.z.cc3',  'cmp.nz.cc3',
+        'icmp.lt.cc3', 'icmp.le.cc3', 'icmp.ge.cc3', 'icmp.gt.cc3', 'icmp.eq.cc3', 'icmp.ne.cc3', 'icmp.z.cc3', 'icmp.nz.cc3',
         'addx'
     }
     flags_written_by_flag_write_type = {
         'none': {},
-        'cc0.cmp.lt':  ['cc0'], 'cc0.cmp.le':  ['cc0'], 'cc0.cmp.ge':  ['cc0'], 'cc0.cmp.gt':  ['cc0'], 'cc0.cmp.eq':  ['cc0'], 'cc0.cmp.ne':  ['cc0'], 'cc0.cmp.z':  ['cc0'], 'cc0.cmp.nz':  ['cc0'],
-        'cc0.icmp.lt': ['cc0'], 'cc0.icmp.le': ['cc0'], 'cc0.icmp.ge': ['cc0'], 'cc0.icmp.gt': ['cc0'], 'cc0.icmp.eq': ['cc0'], 'cc0.icmp.ne': ['cc0'], 'cc0.icmp.z': ['cc0'], 'cc0.icmp.nz': ['cc0'],
-        'cc1.cmp.lt':  ['cc1'], 'cc1.cmp.le':  ['cc1'], 'cc1.cmp.ge':  ['cc1'], 'cc1.cmp.gt':  ['cc1'], 'cc1.cmp.eq':  ['cc1'], 'cc1.cmp.ne':  ['cc1'], 'cc1.cmp.z':  ['cc1'], 'cc1.cmp.nz':  ['cc1'],
-        'cc1.icmp.lt': ['cc1'], 'cc1.icmp.le': ['cc1'], 'cc1.icmp.ge': ['cc1'], 'cc1.icmp.gt': ['cc1'], 'cc1.icmp.eq': ['cc1'], 'cc1.icmp.ne': ['cc1'], 'cc1.icmp.z': ['cc1'], 'cc1.icmp.nz': ['cc1'],
-        'cc2.cmp.lt':  ['cc2'], 'cc2.cmp.le':  ['cc2'], 'cc2.cmp.ge':  ['cc2'], 'cc2.cmp.gt':  ['cc2'], 'cc2.cmp.eq':  ['cc2'], 'cc2.cmp.ne':  ['cc2'], 'cc2.cmp.z':  ['cc2'], 'cc2.cmp.nz':  ['cc2'],
-        'cc2.icmp.lt': ['cc2'], 'cc2.icmp.le': ['cc2'], 'cc2.icmp.ge': ['cc2'], 'cc2.icmp.gt': ['cc2'], 'cc2.icmp.eq': ['cc2'], 'cc2.icmp.ne': ['cc2'], 'cc2.icmp.z': ['cc2'], 'cc2.icmp.nz': ['cc2'],
-        'cc3.cmp.lt':  ['cc3'], 'cc3.cmp.le':  ['cc3'], 'cc3.cmp.ge':  ['cc3'], 'cc3.cmp.gt':  ['cc3'], 'cc3.cmp.eq':  ['cc3'], 'cc3.cmp.ne':  ['cc3'], 'cc3.cmp.z':  ['cc3'], 'cc3.cmp.nz':  ['cc3'],
-        'cc3.icmp.lt': ['cc3'], 'cc3.icmp.le': ['cc3'], 'cc3.icmp.ge': ['cc3'], 'cc3.icmp.gt': ['cc3'], 'cc3.icmp.eq': ['cc3'], 'cc3.icmp.ne': ['cc3'], 'cc3.icmp.z': ['cc3'], 'cc3.icmp.nz': ['cc3'],
+        'cmp.lt.cc0':  ['cc0'], 'cmp.le.cc0':  ['cc0'], 'cmp.ge.cc0':  ['cc0'], 'cmp.gt.cc0':  ['cc0'], 'cmp.eq.cc0':  ['cc0'], 'cmp.ne.cc0':  ['cc0'], 'cmp.z.cc0':  ['cc0'], 'cmp.nz.cc0':  ['cc0'],
+        'icmp.lt.cc0': ['cc0'], 'icmp.le.cc0': ['cc0'], 'icmp.ge.cc0': ['cc0'], 'icmp.gt.cc0': ['cc0'], 'icmp.eq.cc0': ['cc0'], 'icmp.ne.cc0': ['cc0'], 'icmp.z.cc0': ['cc0'], 'icmp.nz.cc0': ['cc0'],
+        'cmp.lt.cc1':  ['cc1'], 'cmp.le.cc1':  ['cc1'], 'cmp.ge.cc1':  ['cc1'], 'cmp.gt.cc1':  ['cc1'], 'cmp.eq.cc1':  ['cc1'], 'cmp.ne.cc1':  ['cc1'], 'cmp.z.cc1':  ['cc1'], 'cmp.nz.cc1':  ['cc1'],
+        'icmp.lt.cc1': ['cc1'], 'icmp.le.cc1': ['cc1'], 'icmp.ge.cc1': ['cc1'], 'icmp.gt.cc1': ['cc1'], 'icmp.eq.cc1': ['cc1'], 'icmp.ne.cc1': ['cc1'], 'icmp.z.cc1': ['cc1'], 'icmp.nz.cc1': ['cc1'],
+        'cmp.lt.cc2':  ['cc2'], 'cmp.le.cc2':  ['cc2'], 'cmp.ge.cc2':  ['cc2'], 'cmp.gt.cc2':  ['cc2'], 'cmp.eq.cc2':  ['cc2'], 'cmp.ne.cc2':  ['cc2'], 'cmp.z.cc2':  ['cc2'], 'cmp.nz.cc2':  ['cc2'],
+        'icmp.lt.cc2': ['cc2'], 'icmp.le.cc2': ['cc2'], 'icmp.ge.cc2': ['cc2'], 'icmp.gt.cc2': ['cc2'], 'icmp.eq.cc2': ['cc2'], 'icmp.ne.cc2': ['cc2'], 'icmp.z.cc2': ['cc2'], 'icmp.nz.cc2': ['cc2'],
+        'cmp.lt.cc3':  ['cc3'], 'cmp.le.cc3':  ['cc3'], 'cmp.ge.cc3':  ['cc3'], 'cmp.gt.cc3':  ['cc3'], 'cmp.eq.cc3':  ['cc3'], 'cmp.ne.cc3':  ['cc3'], 'cmp.z.cc3':  ['cc3'], 'cmp.nz.cc3':  ['cc3'],
+        'icmp.lt.cc3': ['cc3'], 'icmp.le.cc3': ['cc3'], 'icmp.ge.cc3': ['cc3'], 'icmp.gt.cc3': ['cc3'], 'icmp.eq.cc3': ['cc3'], 'icmp.ne.cc3': ['cc3'], 'icmp.z.cc3': ['cc3'], 'icmp.nz.cc3': ['cc3'],
         'addx': ['cc3']
     }
     stack_pointer = 'sp'
@@ -1127,42 +1127,42 @@ class QuarkArch(Architecture):
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.lt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.lt.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.le"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.le.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.ge"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.ge.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.gt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.gt.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.eq"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.eq.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.ne"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cmp.ne.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.nz:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.nz"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cmp.nz.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.cmp.z"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cmp.z.cc{info.b >> 3}"))
                     case _:
                         il.append(il.unimplemented())
             case QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.lt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.lt.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.le:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.le"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.le.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.ge:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.ge"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.ge.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.gt:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.gt"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.gt.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.eq:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.eq"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.eq.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.ne:
-                        il.append(il.sub(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.ne"))
+                        il.append(il.sub(4, ra_expr(), cval(), flags=f"icmp.ne.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.nz:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.nz"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"icmp.nz.cc{info.b >> 3}"))
                     case QuarkCompareOpcode.z:
-                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cc{info.b >> 3}.icmp.z"))
+                        il.append(il.and_expr(4, ra_expr(), cval(), flags=f"icmp.z.cc{info.b >> 3}"))
                     case _:
                         il.append(il.unimplemented())
             case _:
@@ -1201,10 +1201,10 @@ class QuarkArch(Architecture):
                 assert False, "Not handled"
 
         match write_type:
-            case 'cc0.cmp.nz' | 'cc0.icmp.nz' | \
-                 'cc1.cmp.nz' | 'cc1.icmp.nz' | \
-                 'cc2.cmp.nz' | 'cc2.icmp.nz' | \
-                 'cc3.cmp.nz' | 'cc3.icmp.nz':
+            case 'cmp.nz.cc0' | 'icmp.nz.cc0' | \
+                 'cmp.nz.cc1' | 'icmp.nz.cc1' | \
+                 'cmp.nz.cc2' | 'icmp.nz.cc2' | \
+                 'cmp.nz.cc3' | 'icmp.nz.cc3':
                 return il.compare_not_equal(
                     4,
                     il.and_expr(
@@ -1214,10 +1214,10 @@ class QuarkArch(Architecture):
                     ),
                     il.const(4, 0)
                 )
-            case 'cc0.cmp.z' | 'cc0.icmp.z' | \
-                 'cc1.cmp.z' | 'cc1.icmp.z' | \
-                 'cc2.cmp.z' | 'cc2.icmp.z' | \
-                 'cc3.cmp.z' | 'cc3.icmp.z':
+            case 'cmp.z.cc0' | 'icmp.z.cc0' | \
+                 'cmp.z.cc1' | 'icmp.z.cc1' | \
+                 'cmp.z.cc2' | 'icmp.z.cc2' | \
+                 'cmp.z.cc3' | 'icmp.z.cc3':
                 return il.compare_equal(
                     4,
                     il.and_expr(
