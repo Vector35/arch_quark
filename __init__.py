@@ -268,6 +268,7 @@ class QuarkInstruction:
 
 class QuarkArch(Architecture):
     name = "Quark"
+    endianness = Endianness.LittleEndian
     address_size = 4
     default_int_size = 4
     instr_alignment = 1
@@ -1327,6 +1328,7 @@ class QuarkArch(Architecture):
         info.imm17 = value
         return info.instr.to_bytes(4, "little")
 
+    @Architecture.can_assemble.getter
     def can_assemble(self) -> bool:
         return True
 
@@ -1694,7 +1696,7 @@ class QuarkArch(Architecture):
                     i.a = ra
                     assign_cval(i, cval)
                 case _:
-                    raise NotImplemented()
+                    raise ValueError(f"Unknown instruction: {line} / {tokens}")
             result += i.instr.to_bytes(4, "little")
             addr += 4
         return result
