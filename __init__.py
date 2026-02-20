@@ -307,9 +307,9 @@ class QuarkArch(Architecture):
         'lr': RegisterInfo('lr', 4),
         'syscall_num': RegisterInfo('syscall_num', 4),
     }
-    flags = {
+    flags = [
         'cc0', 'cc1', 'cc2', 'cc3',
-    }
+    ]
     flag_roles = {
         'cc0': FlagRole.SpecialFlagRole,
         'cc1': FlagRole.SpecialFlagRole,
@@ -394,7 +394,6 @@ class QuarkArch(Architecture):
         'icmp.lt.cc3': 'icmp.lt', 'icmp.le.cc3': 'icmp.le', 'icmp.ge.cc3': 'icmp.ge', 'icmp.gt.cc3': 'icmp.gt', 'icmp.eq.cc3': 'eq', 'icmp.ne.cc3': 'ne', 'icmp.z.cc3': 'z', 'icmp.nz.cc3': 'nz',
     }
     flag_write_types = {
-        'none',
         'cmp.lt.cc0',  'cmp.le.cc0',  'cmp.ge.cc0',  'cmp.gt.cc0',  'cmp.eq.cc0',  'cmp.ne.cc0',  'cmp.z.cc0',  'cmp.nz.cc0',
         'icmp.lt.cc0', 'icmp.le.cc0', 'icmp.ge.cc0', 'icmp.gt.cc0', 'icmp.eq.cc0', 'icmp.ne.cc0', 'icmp.z.cc0', 'icmp.nz.cc0',
         'cmp.lt.cc1',  'cmp.le.cc1',  'cmp.ge.cc1',  'cmp.gt.cc1',  'cmp.eq.cc1',  'cmp.ne.cc1',  'cmp.z.cc1',  'cmp.nz.cc1',
@@ -406,7 +405,6 @@ class QuarkArch(Architecture):
         'addx'
     }
     flags_written_by_flag_write_type = {
-        'none': {},
         'cmp.lt.cc0':  ['cc0'], 'cmp.le.cc0':  ['cc0'], 'cmp.ge.cc0':  ['cc0'], 'cmp.gt.cc0':  ['cc0'], 'cmp.eq.cc0':  ['cc0'], 'cmp.ne.cc0':  ['cc0'], 'cmp.z.cc0':  ['cc0'], 'cmp.nz.cc0':  ['cc0'],
         'icmp.lt.cc0': ['cc0'], 'icmp.le.cc0': ['cc0'], 'icmp.ge.cc0': ['cc0'], 'icmp.gt.cc0': ['cc0'], 'icmp.eq.cc0': ['cc0'], 'icmp.ne.cc0': ['cc0'], 'icmp.z.cc0': ['cc0'], 'icmp.nz.cc0': ['cc0'],
         'cmp.lt.cc1':  ['cc1'], 'cmp.le.cc1':  ['cc1'], 'cmp.ge.cc1':  ['cc1'], 'cmp.gt.cc1':  ['cc1'], 'cmp.eq.cc1':  ['cc1'], 'cmp.ne.cc1':  ['cc1'], 'cmp.z.cc1':  ['cc1'], 'cmp.nz.cc1':  ['cc1'],
