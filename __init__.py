@@ -1264,7 +1264,30 @@ class QuarkArch(Architecture):
                         ),
                         get_expr_for_register_or_constant(size, operands[0])
                     )
-
+            case 'cmp.lt.cc0' | 'cmp.lt.cc1' | 'cmp.lt.cc2' | 'cmp.lt.cc3':
+                return il.compare_unsigned_less_than(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.lt.cc0' | 'icmp.lt.cc1' | 'icmp.lt.cc2' | 'icmp.lt.cc3':
+                return il.compare_signed_less_than(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'cmp.le.cc0' | 'cmp.le.cc1' | 'cmp.le.cc2' | 'cmp.le.cc3':
+                return il.compare_unsigned_less_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.le.cc0' | 'icmp.le.cc1' | 'icmp.le.cc2' | 'icmp.le.cc3':
+                return il.compare_signed_less_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'cmp.ge.cc0' | 'cmp.ge.cc1' | 'cmp.ge.cc2' | 'cmp.ge.cc3':
+                return il.compare_unsigned_greater_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.ge.cc0' | 'icmp.ge.cc1' | 'icmp.ge.cc2' | 'icmp.ge.cc3':
+                return il.compare_signed_greater_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'cmp.gt.cc0' | 'cmp.gt.cc1' | 'cmp.gt.cc2' | 'cmp.gt.cc3':
+                return il.compare_unsigned_greater_than(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.gt.cc0' | 'icmp.gt.cc1' | 'icmp.gt.cc2' | 'icmp.gt.cc3':
+                return il.compare_signed_greater_than(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'cmp.eq.cc0' | 'cmp.eq.cc1' | 'cmp.eq.cc2' | 'cmp.eq.cc3':
+                return il.compare_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.eq.cc0' | 'icmp.eq.cc1' | 'icmp.eq.cc2' | 'icmp.eq.cc3':
+                return il.compare_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'cmp.ne.cc0' | 'cmp.ne.cc1' | 'cmp.ne.cc2' | 'cmp.ne.cc3':
+                return il.compare_not_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
+            case 'icmp.ne.cc0' | 'icmp.ne.cc1' | 'icmp.ne.cc2' | 'icmp.ne.cc3':
+                return il.compare_not_equal(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
         return il.unimplemented()
 
     def get_semantic_flag_group_low_level_il(
