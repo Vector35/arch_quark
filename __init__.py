@@ -16,19 +16,63 @@ from binaryninja.lowlevelil import ExpressionIndex, ILFlag, InstructionIndex, \
     LowLevelILConst, LowLevelILReg
 from binaryninja.warp import WarpContainer
 
+"""
+Example Architecture for the Quark[1] VM architecture
+
+Demonstrating plugin support for:
+* Disassembly
+* Control Flow
+* Patching
+* Assembly
+* Lifting
+* Semantic Flags
+* Calling Conventions
+* Platform Types
+* Type Libraries
+* WARP Signatures
+
+Described in detail in our three-part blog series:
+1. https://binary.ninja/2026/02/20/quark-platform-part-1.html
+2. https://binary.ninja/2026/02/26/quark-platform-part-2.html
+3. https://binary.ninja/2026/03/04/quark-platform-part-3.html
+"""
+
+
+# ----------------------------------------------------------------------------------------
+# Helper Functions
 
 def rol(i, n):
+    """
+    Rotate i32 left
+    :param i: Integer to rotate
+    :param n: Number of bits to rotate
+    :return: Rotated value
+    """
     return ((i << n) & 0xffffffff) | (i >> (32 - n))
 
 
 def ror(i, n):
+    """
+    Rotate i32 right
+    :param i: Integer to rotate
+    :param n: Number of bits to rotate
+    :return: Rotated value
+    """
     return (i >> n) | ((i << (32 - n)) & 0xffffffff)
 
 
 def i32(i):
+    """
+    Convert u32 to i32 via 2's complement
+    :param i: Integer to convert
+    :return: `i` but if it was > 0x80000000 then negative and 2's complement
+    """
     if i >= 0x80000000:
         return -(0x100000000 - (i & 0xffffffff))
     return i & 0x7fffffff
+
+# ----------------------------------------------------------------------------------------
+# Opcodes
 
 
 class QuarkOpcode(enum.IntEnum):
@@ -63,7 +107,7 @@ class QuarkOpcode(enum.IntEnum):
     mulx = 0x1c
     imulx = 0x1d
     mul = 0x1e
-    integer_group = 0x1f
+    integer_group = 0x1f  # See QuarkIntegerOpcode below
     div = 0x20
     idiv = 0x21
     mod = 0x22
@@ -77,7 +121,8 @@ class QuarkOpcode(enum.IntEnum):
     rol = 0x2a
     ror = 0x2b
     syscall = 0x2c
-    cmp = 0x2d
+
+    cmp = 0x2d  # See QuarkCompareOpcode below
     icmp = 0x2e
 
     # These are all unimplemented by defined by the spec
@@ -135,6 +180,9 @@ class QuarkCompareOpcode(enum.IntEnum):
     ne = 5
     nz = 6
     z = 7
+
+# ----------------------------------------------------------------------------------------
+# Instruction format and decoding/encoding
 
 
 class QuarkInstruction:
@@ -265,13 +313,16 @@ class QuarkInstruction:
     def largeimm(self, largeimm):
         self.instr = (self.instr & 0b1111_1111_1111_1111_1111_0111_1111_1111) | (0x800 if largeimm else 0)
 
+# ----------------------------------------------------------------------------------------
+# Architecture
+
 
 class QuarkArch(Architecture):
     name = "Quark"
     endianness = Endianness.LittleEndian
     address_size = 4
     default_int_size = 4
-    instr_alignment = 1
+    instr_alignment = 1  # Indirect calls can be unaligned
     max_instr_length = 4
     regs = {
         'sp': RegisterInfo('sp', 4),
@@ -305,12 +356,14 @@ class QuarkArch(Architecture):
         'r28': RegisterInfo('r28', 4),
         'r29': RegisterInfo('r29', 4),
         'lr': RegisterInfo('lr', 4),
+        # No ip register. It's handled special
         'syscall_num': RegisterInfo('syscall_num', 4),
     }
     flags = [
         'cc0', 'cc1', 'cc2', 'cc3',
     ]
     flag_roles = {
+        # All flags are special, since none are reserved for specific behaviors
         'cc0': FlagRole.SpecialFlagRole,
         'cc1': FlagRole.SpecialFlagRole,
         'cc2': FlagRole.SpecialFlagRole,
@@ -322,6 +375,7 @@ class QuarkArch(Architecture):
         'eq', 'ne', 'z', 'nz',
     ]
     semantic_flag_groups = [
+        # Flags are only ever read one at a time
         'cc0',
         'cc1',
         'cc2',
@@ -394,17 +448,22 @@ class QuarkArch(Architecture):
         'icmp.lt.cc3': 'icmp.lt', 'icmp.le.cc3': 'icmp.le', 'icmp.ge.cc3': 'icmp.ge', 'icmp.gt.cc3': 'icmp.gt', 'icmp.eq.cc3': 'eq', 'icmp.ne.cc3': 'ne', 'icmp.z.cc3': 'z', 'icmp.nz.cc3': 'nz',
     }
     flag_write_types = {
+        # Each of the 8 unsigned comparisons that could affect cc0
         'cmp.lt.cc0',  'cmp.le.cc0',  'cmp.ge.cc0',  'cmp.gt.cc0',  'cmp.eq.cc0',  'cmp.ne.cc0',  'cmp.z.cc0',  'cmp.nz.cc0',
+        # Same thing for the signed comparisons
         'icmp.lt.cc0', 'icmp.le.cc0', 'icmp.ge.cc0', 'icmp.gt.cc0', 'icmp.eq.cc0', 'icmp.ne.cc0', 'icmp.z.cc0', 'icmp.nz.cc0',
+        # Same thing for the other flags
         'cmp.lt.cc1',  'cmp.le.cc1',  'cmp.ge.cc1',  'cmp.gt.cc1',  'cmp.eq.cc1',  'cmp.ne.cc1',  'cmp.z.cc1',  'cmp.nz.cc1',
         'icmp.lt.cc1', 'icmp.le.cc1', 'icmp.ge.cc1', 'icmp.gt.cc1', 'icmp.eq.cc1', 'icmp.ne.cc1', 'icmp.z.cc1', 'icmp.nz.cc1',
         'cmp.lt.cc2',  'cmp.le.cc2',  'cmp.ge.cc2',  'cmp.gt.cc2',  'cmp.eq.cc2',  'cmp.ne.cc2',  'cmp.z.cc2',  'cmp.nz.cc2',
         'icmp.lt.cc2', 'icmp.le.cc2', 'icmp.ge.cc2', 'icmp.gt.cc2', 'icmp.eq.cc2', 'icmp.ne.cc2', 'icmp.z.cc2', 'icmp.nz.cc2',
         'cmp.lt.cc3',  'cmp.le.cc3',  'cmp.ge.cc3',  'cmp.gt.cc3',  'cmp.eq.cc3',  'cmp.ne.cc3',  'cmp.z.cc3',  'cmp.nz.cc3',
         'icmp.lt.cc3', 'icmp.le.cc3', 'icmp.ge.cc3', 'icmp.gt.cc3', 'icmp.eq.cc3', 'icmp.ne.cc3', 'icmp.z.cc3', 'icmp.nz.cc3',
+        # And addx, which has its own special behavior
         'addx'
     }
     flags_written_by_flag_write_type = {
+        # Each of these comparisons only affects one flag at a time
         'cmp.lt.cc0':  ['cc0'], 'cmp.le.cc0':  ['cc0'], 'cmp.ge.cc0':  ['cc0'], 'cmp.gt.cc0':  ['cc0'], 'cmp.eq.cc0':  ['cc0'], 'cmp.ne.cc0':  ['cc0'], 'cmp.z.cc0':  ['cc0'], 'cmp.nz.cc0':  ['cc0'],
         'icmp.lt.cc0': ['cc0'], 'icmp.le.cc0': ['cc0'], 'icmp.ge.cc0': ['cc0'], 'icmp.gt.cc0': ['cc0'], 'icmp.eq.cc0': ['cc0'], 'icmp.ne.cc0': ['cc0'], 'icmp.z.cc0': ['cc0'], 'icmp.nz.cc0': ['cc0'],
         'cmp.lt.cc1':  ['cc1'], 'cmp.le.cc1':  ['cc1'], 'cmp.ge.cc1':  ['cc1'], 'cmp.gt.cc1':  ['cc1'], 'cmp.eq.cc1':  ['cc1'], 'cmp.ne.cc1':  ['cc1'], 'cmp.z.cc1':  ['cc1'], 'cmp.nz.cc1':  ['cc1'],
@@ -413,16 +472,25 @@ class QuarkArch(Architecture):
         'icmp.lt.cc2': ['cc2'], 'icmp.le.cc2': ['cc2'], 'icmp.ge.cc2': ['cc2'], 'icmp.gt.cc2': ['cc2'], 'icmp.eq.cc2': ['cc2'], 'icmp.ne.cc2': ['cc2'], 'icmp.z.cc2': ['cc2'], 'icmp.nz.cc2': ['cc2'],
         'cmp.lt.cc3':  ['cc3'], 'cmp.le.cc3':  ['cc3'], 'cmp.ge.cc3':  ['cc3'], 'cmp.gt.cc3':  ['cc3'], 'cmp.eq.cc3':  ['cc3'], 'cmp.ne.cc3':  ['cc3'], 'cmp.z.cc3':  ['cc3'], 'cmp.nz.cc3':  ['cc3'],
         'icmp.lt.cc3': ['cc3'], 'icmp.le.cc3': ['cc3'], 'icmp.ge.cc3': ['cc3'], 'icmp.gt.cc3': ['cc3'], 'icmp.eq.cc3': ['cc3'], 'icmp.ne.cc3': ['cc3'], 'icmp.z.cc3': ['cc3'], 'icmp.nz.cc3': ['cc3'],
+        # addx always modifies the cc3 flag
         'addx': ['cc3']
     }
     stack_pointer = 'sp'
     link_reg = 'lr'
     intrinsics = {
-        '__byteswaph': IntrinsicInfo([IntrinsicInput(Type.int(2, False), 'input')], [Type.int(4, False)]),
+        '__byteswaph': IntrinsicInfo(
+            # Inputs
+            [IntrinsicInput(Type.int(2, False), 'input')],
+            # Outputs
+            [Type.int(4, False)]
+        ),
         '__byteswapw': IntrinsicInfo([IntrinsicInput(Type.int(4, False), 'input')], [Type.int(4, False)]),
     }
 
     ip_reg_index = 31
+
+    # ------------------------------------------------------------------------------------
+    # Control Flow
 
     def get_instruction_info(self, data: bytes, addr: int) -> Optional[InstructionInfo]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
@@ -435,18 +503,21 @@ class QuarkArch(Architecture):
         result = InstructionInfo()
         result.length = 4
 
+        # Technically, every instruction with a conditional bit *can* jump
+        # but only handle the ones that are actually jump instructions here.
+        # The others will be figured out when lifting
         match op:
             case QuarkOpcode.jmp:
                 if info.cond & 8:
-                    if info.cond & 1:
+                    if info.cond & 1:  # Jump if condition is met
                         result.add_branch(BranchType.TrueBranch, addr + 4 + i32(info.imm22 << 2))
                         result.add_branch(BranchType.FalseBranch, addr + 4)
-                    else:
+                    else:  # Jump if condition is NOT met
                         result.add_branch(BranchType.TrueBranch, addr + 4)
                         result.add_branch(BranchType.FalseBranch, addr + 4 + i32(info.imm22 << 2))
-                else:
+                else:  # Unconditional jump
                     result.add_branch(BranchType.UnconditionalBranch, addr + 4 + i32(info.imm22 << 2))
-            case QuarkOpcode.call:
+            case QuarkOpcode.call:  # Call relative
                 result.add_branch(BranchType.CallDestination, addr + 4 + i32(info.imm22 << 2))
             case QuarkOpcode.syscall:
                 result.add_branch(BranchType.SystemCall)
@@ -454,14 +525,19 @@ class QuarkArch(Architecture):
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
                     case QuarkIntegerOpcode.mov:
+                        # Move to ip is a jump
+                        # Could have included all other instructions that write to ip
                         if info.a == self.ip_reg_index:
                             result.add_branch(BranchType.IndirectBranch)
-                    case QuarkIntegerOpcode.call:
+                    case QuarkIntegerOpcode.call: # Indirect call
                         result.add_branch(BranchType.CallDestination)
                     case QuarkIntegerOpcode.syscall:
                         result.add_branch(BranchType.SystemCall)
 
         return result
+
+    # ------------------------------------------------------------------------------------
+    # Disassembly
 
     def get_instruction_text(self, data: bytes, addr: int) -> Optional[Tuple[List['function.InstructionTextToken'], int]]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
@@ -473,6 +549,7 @@ class QuarkArch(Architecture):
 
         tokens = []
 
+        # Conditional instructions start with `if ccX`
         if info.cond & 8:
             if info.cond & 1:
                 tokens.extend([
@@ -490,17 +567,30 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
                 ])
         elif info.cond & 1:
+            # Could replace entire instruction with `nop` but this lets us see what was there
             tokens.extend([
                 InstructionTextToken(InstructionTextTokenType.TextToken, "skip"),
                 InstructionTextToken(InstructionTextTokenType.TextToken, " "),
             ])
 
         def reg_name(reg):
+            """
+            Convert register index to name
+            :param reg: Register index from instruction
+            :return: Register name
+            """
             if reg == self.ip_reg_index:
                 return "ip"
             return self.get_reg_name(reg)
 
         def cval_tokens(plus: bool, zero: bool, signed: bool):
+            """
+            Get tokens for cval addressing mode
+            :param plus: If a + should be prepended, to match - being prepended for negative constants
+            :param zero: If empty cval should return a token for 0
+            :param signed: If integers should decode as signed with 2's complement i32s
+            :return: List of tokens to insert into disassembly
+            """
             if info.largeimm:
                 if info.imm11 == 0:
                     if not zero:
@@ -536,6 +626,7 @@ class QuarkArch(Architecture):
                             InstructionTextToken(InstructionTextTokenType.IntegerToken, f"{i32(info.imm11):#x}", value=i32(info.imm11)),
                         ]
             elif info.smallimm:
+                # Never seen this used in practice but the interpreter supports it
                 cval = rol(info.imm5, info.d)
                 if cval == 0:
                     if not zero:
@@ -688,6 +779,7 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     *cval_tokens(plus=False, zero=True, signed=False),
                 ])
+            # Gets its own to handle "and" being a reserved keyword
             case QuarkOpcode.and_:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, "and"),
@@ -698,6 +790,7 @@ class QuarkArch(Architecture):
                     InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                     *cval_tokens(plus=False, zero=True, signed=False),
                 ])
+            # Same as and_
             case QuarkOpcode.or_:
                 tokens.extend([
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, "or"),
@@ -757,6 +850,7 @@ class QuarkArch(Architecture):
                             InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, ", "),
                             InstructionTextToken(InstructionTextTokenType.RegisterToken, reg_name(info.c)),
                         ])
+                    # Gets its own to handle "not" being a reserved keyword
                     case QuarkIntegerOpcode.not_:
                         tokens.extend([
                             InstructionTextToken(InstructionTextTokenType.InstructionToken, "not"),
@@ -816,6 +910,7 @@ class QuarkArch(Architecture):
             case QuarkOpcode.cmp | QuarkOpcode.icmp:
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 tokens.extend([
+                    # cmp.lt.cc0
                     InstructionTextToken(InstructionTextTokenType.InstructionToken, f"{op.name}.{cmp_op.name}."),
                     InstructionTextToken(InstructionTextTokenType.RegisterToken, f"cc{info.b >> 3}"),
                     InstructionTextToken(InstructionTextTokenType.TextToken, " "),
@@ -828,6 +923,9 @@ class QuarkArch(Architecture):
 
         return tokens, 4
 
+    # ------------------------------------------------------------------------------------
+    # Lifting
+
     def get_instruction_low_level_il(self, data: bytes, addr: int, il: LowLevelILFunction) -> Optional[int]:
         info = QuarkInstruction(int.from_bytes(data, 'little'))
         try:
@@ -836,7 +934,9 @@ class QuarkArch(Architecture):
             print(f"Invalid opcode {info.op:#x} at {addr:#x} {data}")
             return None
 
+        # Get name of register in `a` component of instruction
         def ra():
+            # sanity: make sure we don't lift anything that references ip directly
             assert info.a != self.ip_reg_index, "Can't handle ip"
             return il.arch.get_reg_name(info.a)
 
@@ -852,7 +952,9 @@ class QuarkArch(Architecture):
             assert info.d != self.ip_reg_index, "Can't handle ip"
             return il.arch.get_reg_name(info.d)
 
+        # Get expression to get the register in `a` component of instruction
         def ra_expr():
+            # Special case ip register by emitting a constant with its value
             if info.a == self.ip_reg_index:  # ip
                 return il.const(4, addr + 4)
             return il.reg(4, il.arch.get_reg_name(info.a))
@@ -872,6 +974,7 @@ class QuarkArch(Architecture):
                 return il.const(4, addr + 4)
             return il.reg(4, il.arch.get_reg_name(info.d))
 
+        # Addressing modes
         def cval():
             if info.largeimm:
                 return il.const(4, info.imm11)
@@ -880,9 +983,14 @@ class QuarkArch(Architecture):
             else:
                 if info.d == 0:
                     return rc_expr()
+                # Temp is probably overkill here, but maybe it will save us from the x86 problem
+                # of foo = *(bar + (baz * 8)) being annoying to pattern match
                 il.append(il.set_reg(4, LLIL_TEMP(0), il.shift_left(4, rc_expr(), il.const(4, info.d))))
                 return il.reg(4, LLIL_TEMP(0))
 
+        # Since any instruction can write to any register (including IP), we need to handle
+        # potentially causing a jump at any point
+        # Uses the same signature as il.set_reg for easy find+replace
         def set_reg_or_jmp(size, reg, value):
             if reg == self.ip_reg_index:
                 return il.jump(value)
@@ -894,7 +1002,7 @@ class QuarkArch(Architecture):
             # Conditionally executed
             before = LowLevelILLabel()
             after = LowLevelILLabel()
-            if info.cond & 1:
+            if info.cond & 1:  # Execute instruction if condition is true
                 il.append(
                     il.if_expr(
                         il.flag_group(f"cc{(info.cond >> 1) & 3}"),
@@ -902,7 +1010,7 @@ class QuarkArch(Architecture):
                         after
                     )
                 )
-            else:
+            else:  # Execute instruction if condition is false
                 il.append(
                     il.if_expr(
                         il.not_expr(0, il.flag_group(f"cc{(info.cond >> 1) & 3}")),
@@ -910,6 +1018,7 @@ class QuarkArch(Architecture):
                         after
                     )
                 )
+            # Label right before the real instruction, jumping here will execute it normally
             il.mark_label(before)
         elif info.cond & 1:
             # Always skipped apparently
@@ -917,28 +1026,28 @@ class QuarkArch(Architecture):
             return 4
 
         match op:
-            case QuarkOpcode.ldb:
+            case QuarkOpcode.ldb:  # load byte
                 il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
-            case QuarkOpcode.ldh:
+            case QuarkOpcode.ldh:  # load halfword
                 il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
-            case QuarkOpcode.ldw:
+            case QuarkOpcode.ldw:  # load word
                 il.append(set_reg_or_jmp(4, info.a, il.load(4, il.add(4, rb_expr(), cval()))))
-            case QuarkOpcode.ldbu:
+            case QuarkOpcode.ldbu:  # load byte and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
                 il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(1, il.reg(4, addr)))))
-            case QuarkOpcode.ldhu:
+            case QuarkOpcode.ldhu:  # load halfword and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 2))))
                 il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(2, il.reg(4, addr)))))
-            case QuarkOpcode.ldwu:
+            case QuarkOpcode.ldwu:  # load word and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 4))))
                 il.append(set_reg_or_jmp(4, info.a, il.load(4, il.reg(4, addr))))
-            case QuarkOpcode.ldmw:
+            case QuarkOpcode.ldmw:  # load multiple words
                 addr = LLIL_TEMP(1)
                 # (= addr (+ rb + cval))
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
@@ -947,7 +1056,7 @@ class QuarkArch(Architecture):
                     il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
                     # (= (reg i) (load (temp2))
                     il.append(il.set_reg(4, il.arch.get_reg_name(i), il.load(4, il.reg(4, LLIL_TEMP(2)))))
-            case QuarkOpcode.ldmwu:
+            case QuarkOpcode.ldmwu:  # load multiple words and increment source
                 addr = LLIL_TEMP(1)
                 # (= addr (+ rb + cval))
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
@@ -958,46 +1067,46 @@ class QuarkArch(Architecture):
                     il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
                     # (= (reg i) (load (temp2))
                     il.append(il.set_reg(4, il.arch.get_reg_name(i), il.load(4, il.reg(4, LLIL_TEMP(2)))))
-            case QuarkOpcode.ldsxb:
+            case QuarkOpcode.ldsxb:  # load sign extended byte
                 il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
-            case QuarkOpcode.ldsxh:
+            case QuarkOpcode.ldsxh:  # load sign extended halfword
                 il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
-            case QuarkOpcode.ldsxbu:
+            case QuarkOpcode.ldsxbu:  # load sign extended byte and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
                 il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(1, il.reg(4, addr)))))
-            case QuarkOpcode.ldsxhu:
+            case QuarkOpcode.ldsxhu:  # load sign extended halfword and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
                 il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(2, il.reg(4, addr)))))
-            case QuarkOpcode.ldi:
+            case QuarkOpcode.ldi:  # load immediate
                 il.append(set_reg_or_jmp(4, info.a, il.const(4, info.imm17)))
-            case QuarkOpcode.ldih:
+            case QuarkOpcode.ldih:  # load high immediate (16 bits, only place this is used)
                 il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, il.zero_extend(4, il.low_part(2, ra_expr())), il.const(4, info.immhi))))
-            case QuarkOpcode.stb:
+            case QuarkOpcode.stb:  # store byte
                 il.append(il.store(1, il.add(4, rb_expr(), cval()), il.low_part(1, ra_expr())))
-            case QuarkOpcode.sth:
+            case QuarkOpcode.sth:  # store halfword
                 il.append(il.store(2, il.add(4, rb_expr(), cval()), il.low_part(2, ra_expr())))
-            case QuarkOpcode.stw:
+            case QuarkOpcode.stw:  # store word
                 il.append(il.store(4, il.add(4, rb_expr(), cval()), ra_expr()))
-            case QuarkOpcode.stbu:
+            case QuarkOpcode.stbu:  # store byte and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(1, il.reg(4, addr), il.low_part(1, ra_expr())))
-            case QuarkOpcode.sthu:
+            case QuarkOpcode.sthu:  # store halfword and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(2, il.reg(4, addr), il.low_part(2, ra_expr())))
-            case QuarkOpcode.stwu:
+            case QuarkOpcode.stwu:  # store word and increment source
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(4, il.reg(4, addr), ra_expr()))
-            case QuarkOpcode.stmw:
+            case QuarkOpcode.stmw:  # store multiple words
                 addr = LLIL_TEMP(1)
                 # (= addr (+ rb + cval))
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
@@ -1006,7 +1115,7 @@ class QuarkArch(Architecture):
                     il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
                     # (store temp2 (reg i))
                     il.append(il.store(4, il.reg(4, LLIL_TEMP(2)), il.reg(4, il.arch.get_reg_name(i))))
-            case QuarkOpcode.stmwu:
+            case QuarkOpcode.stmwu:  # store multiple words and increment source
                 addr = LLIL_TEMP(1)
                 # (= addr (+ rb + cval))
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
@@ -1017,124 +1126,127 @@ class QuarkArch(Architecture):
                     il.append(il.store(4, il.reg(4, LLIL_TEMP(2)), il.reg(4, il.arch.get_reg_name(i))))
                 # (= rb addr)
                 il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
-            case QuarkOpcode.jmp:
+            case QuarkOpcode.jmp:  # jump relative
                 il.append(il.jump(il.const(4, addr + 4 + i32(info.imm22 << 2))))
-            case QuarkOpcode.call:
+            case QuarkOpcode.call:  # direct call relative
                 il.append(il.call(il.const(4, addr + 4 + i32(info.imm22 << 2))))
-            case QuarkOpcode.add:
+            case QuarkOpcode.add:  # add
                 il.append(set_reg_or_jmp(4, info.a, il.add(4, rb_expr(), cval())))
-            case QuarkOpcode.sub:
+            case QuarkOpcode.sub:  # subtract
                 il.append(set_reg_or_jmp(4, info.a, il.sub(4, rb_expr(), cval())))
-            case QuarkOpcode.addx:
+            case QuarkOpcode.addx:  # add with carry
                 il.append(set_reg_or_jmp(4, info.a, il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
-            case QuarkOpcode.subx:
+            case QuarkOpcode.subx:  # subtract with borrow
                 il.append(set_reg_or_jmp(4, info.a, il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
-            case QuarkOpcode.mulx:
+            case QuarkOpcode.mulx:  # double precision multiply
+                # The set_reg_split call could have either half output into ip,
+                # so output to temporary registers and then set those
                 il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
+                # We need to modify ra first in case ra == rd, but if ra == rd == ip
+                # then modifying ra first would cause the jump to happen and skip modifying rd.
+                # Since ra == rd clobbers ra anyway, we can skip that write and solve this while
+                # keeping the semantics of the instruction correct.
                 if info.a != info.d:
                     il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
                 il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
-            case QuarkOpcode.imulx:
+            case QuarkOpcode.imulx:  # double precision signed multiply
                 il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_signed(4, rb_expr(), rc_expr())))
                 if info.a != info.d:
                     il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
                 il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
-            case QuarkOpcode.mul:
+            case QuarkOpcode.mul:  # single precision multiply
                 il.append(set_reg_or_jmp(4, info.a, il.mult(4, rb_expr(), cval())))
-            case QuarkOpcode.div:
+            case QuarkOpcode.div:  # unsigned division
                 il.append(set_reg_or_jmp(4, info.a, il.div_unsigned(4, rb_expr(), cval())))
-            case QuarkOpcode.idiv:
+            case QuarkOpcode.idiv:  # signed division
                 il.append(set_reg_or_jmp(4, info.a, il.div_signed(4, rb_expr(), cval())))
-            case QuarkOpcode.mod:
+            case QuarkOpcode.mod:  # unsigned modulo
                 il.append(set_reg_or_jmp(4, info.a, il.mod_unsigned(4, rb_expr(), cval())))
-            case QuarkOpcode.imod:
+            case QuarkOpcode.imod:  # signed modulo
                 il.append(set_reg_or_jmp(4, info.a, il.mod_signed(4, rb_expr(), cval())))
-            case QuarkOpcode.and_:
+            case QuarkOpcode.and_:  # bit and
                 il.append(set_reg_or_jmp(4, info.a, il.and_expr(4, rb_expr(), cval())))
-            case QuarkOpcode.or_:
+            case QuarkOpcode.or_:  # bit or
                 il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, rb_expr(), cval())))
-            case QuarkOpcode.xor:
+            case QuarkOpcode.xor:  # bit xor
                 il.append(set_reg_or_jmp(4, info.a, il.xor_expr(4, rb_expr(), cval())))
-            case QuarkOpcode.sar:
+            case QuarkOpcode.sar:  # arithmetic shift right
                 il.append(set_reg_or_jmp(4, info.a, il.arith_shift_right(4, rb_expr(), cval())))
-            case QuarkOpcode.shl:
+            case QuarkOpcode.shl:  # logical shift left (and arithmetic, they're the same)
                 il.append(set_reg_or_jmp(4, info.a, il.shift_left(4, rb_expr(), cval())))
-            case QuarkOpcode.shr:
+            case QuarkOpcode.shr:  # logical shift right
                 il.append(set_reg_or_jmp(4, info.a, il.logical_shift_right(4, rb_expr(), cval())))
-            case QuarkOpcode.rol:
+            case QuarkOpcode.rol:  # rotate left
                 il.append(set_reg_or_jmp(4, info.a, il.rotate_left(4, rb_expr(), cval())))
-            case QuarkOpcode.ror:
+            case QuarkOpcode.ror:  # rotate right
                 il.append(set_reg_or_jmp(4, info.a, il.rotate_right(4, rb_expr(), cval())))
-            case QuarkOpcode.syscall:
+            case QuarkOpcode.syscall:  # system call
                 il.append(il.set_reg(4, 'syscall_num', il.const(4, info.imm22)))
                 il.append(il.system_call())
             case QuarkOpcode.integer_group:
                 int_op = QuarkIntegerOpcode(info.b)
                 match int_op:
-                    case QuarkIntegerOpcode.mov:
-                        if info.a == self.ip_reg_index:
-                            il.append(il.jump(cval()))
-                        else:
-                            il.append(set_reg_or_jmp(4, info.a, cval()))
-                    case QuarkIntegerOpcode.xchg:
+                    case QuarkIntegerOpcode.mov:  # move to register
+                        il.append(set_reg_or_jmp(4, info.a, cval()))
+                    case QuarkIntegerOpcode.xchg:  # exchange registers
                         result = LLIL_TEMP(1)
                         il.append(il.set_reg(4, result, ra_expr()))
                         il.append(set_reg_or_jmp(4, info.a, rc_expr()))
                         il.append(set_reg_or_jmp(4, info.c, il.reg(4, result)))
-                    case QuarkIntegerOpcode.sxb:
+                    case QuarkIntegerOpcode.sxb:  # sign extend byte
                         il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.low_part(1, rc_expr()))))
-                    case QuarkIntegerOpcode.sxh:
+                    case QuarkIntegerOpcode.sxh:  # sign extend halfword
                         il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.low_part(2, rc_expr()))))
-                    case QuarkIntegerOpcode.swaph:
+                    case QuarkIntegerOpcode.swaph:  # endian byte swap halfword
                         il.append(il.intrinsic([ra()], '__byteswaph', [il.low_part(2, rc_expr())]))
-                    case QuarkIntegerOpcode.swapw:
+                    case QuarkIntegerOpcode.swapw:  # endian byte swap word
                         il.append(il.intrinsic([ra()], '__byteswapw', [rc_expr()]))
-                    case QuarkIntegerOpcode.call:
+                    case QuarkIntegerOpcode.call:  # indirect call
                         addr = LLIL_TEMP(1)
                         il.append(il.set_reg(4, addr, ra_expr()))
                         il.append(il.call(il.reg(4, addr)))
-                    case QuarkIntegerOpcode.neg:
+                    case QuarkIntegerOpcode.neg:  # bit negate
                         il.append(set_reg_or_jmp(4, info.a, il.neg_expr(4, rc_expr())))
-                    case QuarkIntegerOpcode.not_:
+                    case QuarkIntegerOpcode.not_:  # bit not
                         il.append(set_reg_or_jmp(4, info.a, il.not_expr(4, rc_expr())))
-                    case QuarkIntegerOpcode.zxb:
+                    case QuarkIntegerOpcode.zxb:  # zero extend byte
                         il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.low_part(1, rc_expr()))))
-                    case QuarkIntegerOpcode.zxh:
+                    case QuarkIntegerOpcode.zxh:  # zero extend halfword
                         il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.low_part(2, rc_expr()))))
-                    case QuarkIntegerOpcode.ldcr:
+                    case QuarkIntegerOpcode.ldcr:  # load flags to register
                         cc0 = il.flag_bit(4, 'cc0', 0)
                         cc1 = il.flag_bit(4, 'cc1', 8)
                         cc2 = il.flag_bit(4, 'cc2', 16)
                         cc3 = il.flag_bit(4, 'cc3', 24)
                         il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, cc3, il.or_expr(4, cc2, il.or_expr(4, cc1, cc0)))))
-                    case QuarkIntegerOpcode.stcr:
+                    case QuarkIntegerOpcode.stcr:  # store register to flags
                         il.append(il.set_reg(1, LLIL_TEMP(0), ra_expr()))
                         il.append(il.set_flag('cc0', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x1))))
                         il.append(il.set_flag('cc1', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x100))))
                         il.append(il.set_flag('cc2', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x10000))))
                         il.append(il.set_flag('cc3', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x1000000))))
-                    case QuarkIntegerOpcode.syscall:
+                    case QuarkIntegerOpcode.syscall:  # system call by reg
                         il.append(il.set_reg(4, 'syscall_num', ra_expr()))
                         il.append(il.system_call())
-                    case QuarkIntegerOpcode.setcc:
+                    case QuarkIntegerOpcode.setcc:  # set flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.const(0, 1)))
-                    case QuarkIntegerOpcode.clrcc:
+                    case QuarkIntegerOpcode.clrcc:  # clear flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.const(0, 0)))
-                    case QuarkIntegerOpcode.notcc:
+                    case QuarkIntegerOpcode.notcc:  # invert flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.not_expr(0, il.flag(f"cc{info.c & 3}"))))
-                    case QuarkIntegerOpcode.movcc:
+                    case QuarkIntegerOpcode.movcc:  # move flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.flag(f"cc{info.c & 3}")))
-                    case QuarkIntegerOpcode.andcc:
+                    case QuarkIntegerOpcode.andcc:  # and flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.and_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
-                    case QuarkIntegerOpcode.orcc:
+                    case QuarkIntegerOpcode.orcc:  # or flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.or_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
-                    case QuarkIntegerOpcode.xorcc:
+                    case QuarkIntegerOpcode.xorcc:  # xor flag
                         il.append(il.set_flag(il.arch.get_flag_index(f"cc{info.a & 3}"), il.xor_expr(0, il.flag(f"cc{info.c & 3}"), il.flag(f"cc{info.d & 3}"))))
-                    case QuarkIntegerOpcode.bp:
+                    case QuarkIntegerOpcode.bp:  # breakpoint (not implemented in vm)
                         il.append(il.breakpoint())
                     case _:
                         il.append(il.unimplemented())
-            case QuarkOpcode.cmp:
+            case QuarkOpcode.cmp:  # unsigned comparisons
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
@@ -1155,7 +1267,7 @@ class QuarkArch(Architecture):
                         il.append(il.and_expr(4, ra_expr(), cval(), flags=f"cmp.z.cc{info.b >> 3}"))
                     case _:
                         il.append(il.unimplemented())
-            case QuarkOpcode.icmp:
+            case QuarkOpcode.icmp:  # signed comparisons
                 cmp_op = QuarkCompareOpcode(info.b & 7)
                 match cmp_op:
                     case QuarkCompareOpcode.lt:
@@ -1180,9 +1292,13 @@ class QuarkArch(Architecture):
                 il.append(il.unimplemented())
 
         if after is not None:
+            # Label after the instruction, jumping here will skip execution
             il.mark_label(after)
 
         return 4
+
+    # ------------------------------------------------------------------------------------
+    # Flag callbacks
 
     def get_flag_write_low_level_il(
         self, op: LowLevelILOperation, size: int, write_type: Optional[FlagWriteTypeName], flag: FlagType,
@@ -1212,6 +1328,7 @@ class QuarkArch(Architecture):
                 assert False, "Not handled"
 
         match write_type:
+            # `nz` condition: Compare if the AND of two values is non-zero
             case 'cmp.nz.cc0' | 'icmp.nz.cc0' | \
                  'cmp.nz.cc1' | 'icmp.nz.cc1' | \
                  'cmp.nz.cc2' | 'icmp.nz.cc2' | \
@@ -1225,6 +1342,7 @@ class QuarkArch(Architecture):
                     ),
                     il.const(4, 0)
                 )
+            # `z` condition: Compare if the AND of two values is zero
             case 'cmp.z.cc0' | 'icmp.z.cc0' | \
                  'cmp.z.cc1' | 'icmp.z.cc1' | \
                  'cmp.z.cc2' | 'icmp.z.cc2' | \
@@ -1266,6 +1384,7 @@ class QuarkArch(Architecture):
                         ),
                         get_expr_for_register_or_constant(size, operands[0])
                     )
+            # In case these get spilled to temporary writes, need to implement flag write for all conditions
             case 'cmp.lt.cc0' | 'cmp.lt.cc1' | 'cmp.lt.cc2' | 'cmp.lt.cc3':
                 return il.compare_unsigned_less_than(size, get_expr_for_register_or_constant(size, operands[0]), get_expr_for_register_or_constant(size, operands[1]))
             case 'icmp.lt.cc0' | 'icmp.lt.cc1' | 'icmp.lt.cc2' | 'icmp.lt.cc3':
@@ -1295,7 +1414,7 @@ class QuarkArch(Architecture):
     def get_semantic_flag_group_low_level_il(
         self, sem_group: Optional[SemanticGroupType], il: 'lowlevelil.LowLevelILFunction'
     ) -> 'lowlevelil.ExpressionIndex':
-        match sem_group:
+        match sem_group:  # Each Semantic Flag Group only tests one flag since conditional branches can only read one flag
             case 'cc0':
                 return il.flag('cc0')
             case 'cc1':
@@ -1307,10 +1426,21 @@ class QuarkArch(Architecture):
             case _:
                 return il.unimplemented()
 
+    # ------------------------------------------------------------------------------------
+    # Patching
+
     def convert_to_nop(self, data: bytes, addr: int = 0) -> Optional[bytes]:
+        # No need to be fancy here, just repeat a sequence that does nothing
+        # Could also set QuarkInstruction.cond = 1
         return b'\x00\x00\xc0\x17' * (len(data) // 4)
 
+    # Never branch uses convert_to_nop
+
+    # Convert to NOP does not have a callback. It will be available if the
+    # selection does not have the "never branch" patch available.
+
     def is_never_branch_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        # Make sure the data is a conditional branch
         if len(data) != 4:
             return False
         info = QuarkInstruction(int.from_bytes(data, 'little'))
@@ -1329,6 +1459,7 @@ class QuarkArch(Architecture):
         return info.cond != 0
 
     def is_skip_and_return_zero_patch_available(self, data: bytes, addr: int = 0) -> bool:
+        # Make sure the data is a call
         if len(data) != 4:
             return False
         info = QuarkInstruction(int.from_bytes(data, 'little'))
@@ -1344,22 +1475,27 @@ class QuarkArch(Architecture):
         if len(data) != 4:
             return None
         info = QuarkInstruction(int.from_bytes(data, 'little'))
-        info.cond = 0
+        info.cond = 0  # Clear conditional execution flags
         return info.instr.to_bytes(4, "little")
 
     def invert_branch(self, data: bytes, addr: int = 0) -> Optional[bytes]:
         if len(data) != 4:
             return None
         info = QuarkInstruction(int.from_bytes(data, 'little'))
-        info.cond = info.cond ^ 1
+        info.cond = info.cond ^ 1  # Toggle if the instruction is skipped
         return info.instr.to_bytes(4, "little")
+
+    # Skip and return zero uses skip_and_return_value(0)
 
     def skip_and_return_value(self, data: bytes, addr: int, value: int) -> Optional[bytes]:
         info = QuarkInstruction(0)
         info.op = QuarkOpcode.ldi
-        info.a = 1  # return reg is normally r1
+        info.a = 1  # return reg is normally r1 (shouldn't this need calling convention support??)
         info.imm17 = value
         return info.instr.to_bytes(4, "little")
+
+    # ------------------------------------------------------------------------------------
+    # Assembler
 
     @Architecture.can_assemble.getter
     def can_assemble(self) -> bool:
@@ -1734,6 +1870,9 @@ class QuarkArch(Architecture):
             addr += 4
         return result
 
+# ----------------------------------------------------------------------------------------
+# Platform setup and initialization
+
 
 class QuarkCallingConvention(CallingConvention):
     name = "qcall"
@@ -1742,17 +1881,17 @@ class QuarkCallingConvention(CallingConvention):
     int_arg_regs = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
     int_return_reg = 'r1'
     high_int_return_reg = 'r2'
-    arg_regs_for_varargs = False
+    arg_regs_for_varargs = False  # varargs functions take all params on the stack
 
 
 class QuarkSyscallCallingConvention(CallingConvention):
     name = "qsyscall"
-    caller_saved_regs = ['r1', 'r2']
+    caller_saved_regs = ['r1', 'r2']  # syscall preserves everything but the result regs
     callee_saved_regs = ['r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15', 'r16', 'r17', 'r18', 'r19', 'r20', 'r21', 'r22', 'r23', 'r24', 'r25', 'r26', 'r27', 'r28']
     int_arg_regs = ['syscall_num', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
     int_return_reg = 'r1'
     high_int_return_reg = 'r2'
-    eligible_for_heuristics = False
+    eligible_for_heuristics = False  # Don't try to guess if a call is syscall
 
 
 class LinuxQuarkPlatform(Platform):
@@ -1762,8 +1901,13 @@ class LinuxQuarkPlatform(Platform):
     def view_init(self, view: BinaryView):
         if not isinstance(view, BinaryView):  # Fixed in >= 5.3
             view = BinaryView(handle=binaryninja.core.BNNewViewReference(view))
-        WarpContainer['User'].add_source(str(Path(__file__).parent / "signatures" / "quark_stdlib.warp"))
+        # Add stdlib Type Library to every analysis since it's static linked
         view.add_type_library(TypeLibrary.from_name(self.arch, "stdlib"))
+
+        # Source needs to be added _after_ the WARP containers load, but that is done asynchronously
+        # So, doing it in view_init means we will most likely lose the race and run this after.
+        # >= 5.3 should have a new way of handling WARP sigs but this works for now
+        WarpContainer['User'].add_source(str(Path(__file__).parent / "signatures" / "quark_stdlib.warp"))
 
 
 QuarkArch.register()
@@ -1787,8 +1931,12 @@ BinaryViewType['ELF'].register_arch(4242, Endianness.LittleEndian, qarch)
 BinaryViewType['ELF'].register_platform(0, qarch, qlinuxplatform)
 BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
 
+# Load all the bundled Type Libraries
 for file in (Path(__file__).parent / "typelib").glob("*.bntl"):
     TypeLibrary.load_from_file(str(file))
+
+# ----------------------------------------------------------------------------------------
+# Workflow for improving signatures
 
 
 def rewrite_lil_relative_load(context: AnalysisContext):
@@ -1805,16 +1953,25 @@ def rewrite_lil_relative_load(context: AnalysisContext):
     new_llil.prepare_to_copy_function(old_llil)
     for old_block in old_llil.basic_blocks:
         new_llil.prepare_to_copy_block(old_block)
+        # !! Make an iterator of the old instructions, which we can advance to skip them
+        # since our pattern replaces multiple instructions
         instructions = iter(range(old_block.start, old_block.end))
         for old_instr_index in instructions:
             old_instr: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index)]
             new_llil.set_current_address(old_instr.address, old_block.arch)
 
+            # Replace instructions with this really cool match powered by python 3.10
+
+            # Load the next two instructions so we have a sequence of 3 instructions
             if old_instr_index + 2 < old_block.end:
-                next_instr: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 1)]
-                next_instr_2: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 2)]
-                match (old_instr, next_instr, next_instr_2):
+                old_next_instr: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 1)]
+                old_next_instr_2: LowLevelILInstruction = old_llil[InstructionIndex(old_instr_index + 2)]
+                match (old_instr, old_next_instr, old_next_instr_2):
+                    # Match all 3 instructions at once
                     case (
+                        # rA = const
+                        # rB = <addr> + rA
+                        # rA = rB
                         LowLevelILSetReg(dest=regA, src=LowLevelILConst(constant=const)),
                         LowLevelILSetReg(
                             dest=regB,
@@ -1824,7 +1981,8 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                             )
                         ),
                         LowLevelILSetReg(dest=regA_3, src=LowLevelILReg(src=regB_2))
-                    ) if const_2 == next_instr_2.address and regA == regA_2 == regA_3 and regB == regB_2:
+                    ) if const_2 == old_next_instr_2.address and regA == regA_2 == regA_3 and regB == regB_2:
+                        # rA = <addr + const>
                         new_llil.append(
                             new_llil.set_reg(
                                 old_instr.size,
@@ -1832,11 +1990,12 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                                 new_llil.const(
                                     old_instr.size,
                                     const + const_2,
-                                    loc=next_instr_2.source_location
+                                    loc=old_next_instr_2.source_location  # Using all instr locations for mappings
                                 ),
-                                loc=old_instr.source_location
+                                loc=old_instr.source_location  # Using all instr locations for mappings
                             )
                         )
+                        # rB = <addr + const>
                         new_llil.append(
                             new_llil.set_reg(
                                 old_instr.size,
@@ -1844,12 +2003,16 @@ def rewrite_lil_relative_load(context: AnalysisContext):
                                 new_llil.const(
                                     old_instr.size,
                                     const + const_2,
-                                    loc=next_instr_2.source_location
+                                    loc=old_next_instr_2.source_location  # Using all instr locations for mappings
                                 ),
-                                loc=next_instr.source_location
+                                loc=old_next_instr.source_location  # Using all instr locations for mappings
                             )
                         )
-                        new_llil.append(new_llil.nop(loc=next_instr_2.source_location))
+                        # Adding a nop here fixes stack resolution on the third instruction in disassembly view
+                        # Not sure why, but it works
+                        new_llil.append(new_llil.nop(loc=old_next_instr_2.source_location))
+                        # Skip the next two instructions in the IL function
+                        # because we matched them above and are replacing them here
                         next(instructions)
                         next(instructions)
                         any_replaced = True
@@ -1857,6 +2020,7 @@ def rewrite_lil_relative_load(context: AnalysisContext):
 
             new_llil.append(old_instr.copy_to(new_llil))
 
+    # Update analysis if we changed anything
     if any_replaced:
         new_llil.finalize()
         context.lifted_il = new_llil
@@ -1870,6 +2034,8 @@ qwf.register_activity(Activity(
         "description": "Combine the instructions for relative loads into one instruction, for improvements in signature generation",
         "eligibility": {
             "predicates": [
+                # Only for linux-quark platform
+                # Theoretically we want "only for quark arch" but arch predicates don't exist
                 {
                     "type": "platform",
                     "operator": "==",
