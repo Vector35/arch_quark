@@ -1031,12 +1031,14 @@ class QuarkArch(Architecture):
                 il.append(set_reg_or_jmp(4, info.a, il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
             case QuarkOpcode.mulx:
                 il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
+                if info.a != info.d:
+                    il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
                 il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
-                il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
             case QuarkOpcode.imulx:
                 il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_signed(4, rb_expr(), rc_expr())))
+                if info.a != info.d:
+                    il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
                 il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
-                il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
             case QuarkOpcode.mul:
                 il.append(set_reg_or_jmp(4, info.a, il.mult(4, rb_expr(), cval())))
             case QuarkOpcode.div:
