@@ -883,6 +883,12 @@ class QuarkArch(Architecture):
                 il.append(il.set_reg(4, LLIL_TEMP(0), il.shift_left(4, rc_expr(), il.const(4, info.d))))
                 return il.reg(4, LLIL_TEMP(0))
 
+        def set_reg_or_jmp(size, reg, value):
+            if reg == self.ip_reg_index:
+                return il.jump(value)
+            else:
+                return il.set_reg(size, reg, value)
+
         after = None
         if info.cond & 8:
             # Conditionally executed
@@ -912,26 +918,26 @@ class QuarkArch(Architecture):
 
         match op:
             case QuarkOpcode.ldb:
-                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
+                il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
             case QuarkOpcode.ldh:
-                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
+                il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
             case QuarkOpcode.ldw:
-                il.append(il.set_reg(4, ra(), il.load(4, il.add(4, rb_expr(), cval()))))
+                il.append(set_reg_or_jmp(4, info.a, il.load(4, il.add(4, rb_expr(), cval()))))
             case QuarkOpcode.ldbu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
-                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(1, il.reg(4, addr)))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(1, il.reg(4, addr)))))
             case QuarkOpcode.ldhu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 2))))
-                il.append(il.set_reg(4, ra(), il.zero_extend(4, il.load(2, il.reg(4, addr)))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 2))))
+                il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.load(2, il.reg(4, addr)))))
             case QuarkOpcode.ldwu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 4))))
-                il.append(il.set_reg(4, ra(), il.load(4, il.reg(4, addr))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 4))))
+                il.append(set_reg_or_jmp(4, info.a, il.load(4, il.reg(4, addr))))
             case QuarkOpcode.ldmw:
                 addr = LLIL_TEMP(1)
                 # (= addr (+ rb + cval))
@@ -946,30 +952,30 @@ class QuarkArch(Architecture):
                 # (= addr (+ rb + cval))
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
                 # (= rb (+ addr [(31 - a) * 4]))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, (31 - info.a) * 4))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, (31 - info.a) * 4))))
                 for i in range(info.a, 31):
                     # (= temp2 (+ addr [(i-a) * 4])
                     il.append(il.set_reg(4, LLIL_TEMP(2), il.add(4, il.reg(4, addr), il.const(4, (i - info.a) * 4))))
                     # (= (reg i) (load (temp2))
                     il.append(il.set_reg(4, il.arch.get_reg_name(i), il.load(4, il.reg(4, LLIL_TEMP(2)))))
             case QuarkOpcode.ldsxb:
-                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
+                il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(1, il.add(4, rb_expr(), cval())))))
             case QuarkOpcode.ldsxh:
-                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
+                il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(2, il.add(4, rb_expr(), cval())))))
             case QuarkOpcode.ldsxbu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
-                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(1, il.reg(4, addr)))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(1, il.reg(4, addr)))))
             case QuarkOpcode.ldsxhu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.add(4, il.reg(4, addr), il.const(4, 1))))
-                il.append(il.set_reg(4, ra(), il.sign_extend(4, il.load(2, il.reg(4, addr)))))
+                il.append(set_reg_or_jmp(4, info.b, il.add(4, il.reg(4, addr), il.const(4, 1))))
+                il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.load(2, il.reg(4, addr)))))
             case QuarkOpcode.ldi:
-                il.append(il.set_reg(4, ra(), il.const(4, info.imm17)))
+                il.append(set_reg_or_jmp(4, info.a, il.const(4, info.imm17)))
             case QuarkOpcode.ldih:
-                il.append(il.set_reg(4, ra(), il.or_expr(4, il.zero_extend(4, il.low_part(2, ra_expr())), il.const(4, info.immhi))))
+                il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, il.zero_extend(4, il.low_part(2, ra_expr())), il.const(4, info.immhi))))
             case QuarkOpcode.stb:
                 il.append(il.store(1, il.add(4, rb_expr(), cval()), il.low_part(1, ra_expr())))
             case QuarkOpcode.sth:
@@ -979,17 +985,17 @@ class QuarkArch(Architecture):
             case QuarkOpcode.stbu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
+                il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(1, il.reg(4, addr), il.low_part(1, ra_expr())))
             case QuarkOpcode.sthu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
+                il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(2, il.reg(4, addr), il.low_part(2, ra_expr())))
             case QuarkOpcode.stwu:
                 addr = LLIL_TEMP(1)
                 il.append(il.set_reg(4, addr, il.add(4, rb_expr(), cval())))
-                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
+                il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
                 il.append(il.store(4, il.reg(4, addr), ra_expr()))
             case QuarkOpcode.stmw:
                 addr = LLIL_TEMP(1)
@@ -1010,49 +1016,53 @@ class QuarkArch(Architecture):
                     # (store temp2 (reg i))
                     il.append(il.store(4, il.reg(4, LLIL_TEMP(2)), il.reg(4, il.arch.get_reg_name(i))))
                 # (= rb addr)
-                il.append(il.set_reg(4, rb(), il.reg(4, addr)))
+                il.append(set_reg_or_jmp(4, info.b, il.reg(4, addr)))
             case QuarkOpcode.jmp:
                 il.append(il.jump(il.const(4, addr + 4 + i32(info.imm22 << 2))))
             case QuarkOpcode.call:
                 il.append(il.call(il.const(4, addr + 4 + i32(info.imm22 << 2))))
             case QuarkOpcode.add:
-                il.append(il.set_reg(4, ra(), il.add(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.add(4, rb_expr(), cval())))
             case QuarkOpcode.sub:
-                il.append(il.set_reg(4, ra(), il.sub(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.sub(4, rb_expr(), cval())))
             case QuarkOpcode.addx:
-                il.append(il.set_reg(4, ra(), il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
+                il.append(set_reg_or_jmp(4, info.a, il.add_carry(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
             case QuarkOpcode.subx:
-                il.append(il.set_reg(4, ra(), il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
+                il.append(set_reg_or_jmp(4, info.a, il.sub_borrow(4, rb_expr(), cval(), il.flag('cc3'), flags='addx')))
             case QuarkOpcode.mulx:
-                il.append(il.set_reg_split(4, rd(), ra(), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
+                il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_unsigned(4, rb_expr(), rc_expr())))
+                il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
+                il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
             case QuarkOpcode.imulx:
-                il.append(il.set_reg_split(4, rd(), ra(), il.mult_double_prec_signed(4, rb_expr(), rc_expr())))
+                il.append(il.set_reg_split(4, LLIL_TEMP(1), LLIL_TEMP(2), il.mult_double_prec_signed(4, rb_expr(), rc_expr())))
+                il.append(set_reg_or_jmp(4, info.d, il.reg(4, LLIL_TEMP(1))))
+                il.append(set_reg_or_jmp(4, info.a, il.reg(4, LLIL_TEMP(2))))
             case QuarkOpcode.mul:
-                il.append(il.set_reg(4, ra(), il.mult(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.mult(4, rb_expr(), cval())))
             case QuarkOpcode.div:
-                il.append(il.set_reg(4, ra(), il.div_unsigned(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.div_unsigned(4, rb_expr(), cval())))
             case QuarkOpcode.idiv:
-                il.append(il.set_reg(4, ra(), il.div_signed(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.div_signed(4, rb_expr(), cval())))
             case QuarkOpcode.mod:
-                il.append(il.set_reg(4, ra(), il.mod_unsigned(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.mod_unsigned(4, rb_expr(), cval())))
             case QuarkOpcode.imod:
-                il.append(il.set_reg(4, ra(), il.mod_signed(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.mod_signed(4, rb_expr(), cval())))
             case QuarkOpcode.and_:
-                il.append(il.set_reg(4, ra(), il.and_expr(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.and_expr(4, rb_expr(), cval())))
             case QuarkOpcode.or_:
-                il.append(il.set_reg(4, ra(), il.or_expr(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, rb_expr(), cval())))
             case QuarkOpcode.xor:
-                il.append(il.set_reg(4, ra(), il.xor_expr(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.xor_expr(4, rb_expr(), cval())))
             case QuarkOpcode.sar:
-                il.append(il.set_reg(4, ra(), il.arith_shift_right(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.arith_shift_right(4, rb_expr(), cval())))
             case QuarkOpcode.shl:
-                il.append(il.set_reg(4, ra(), il.shift_left(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.shift_left(4, rb_expr(), cval())))
             case QuarkOpcode.shr:
-                il.append(il.set_reg(4, ra(), il.logical_shift_right(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.logical_shift_right(4, rb_expr(), cval())))
             case QuarkOpcode.rol:
-                il.append(il.set_reg(4, ra(), il.rotate_left(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.rotate_left(4, rb_expr(), cval())))
             case QuarkOpcode.ror:
-                il.append(il.set_reg(4, ra(), il.rotate_right(4, rb_expr(), cval())))
+                il.append(set_reg_or_jmp(4, info.a, il.rotate_right(4, rb_expr(), cval())))
             case QuarkOpcode.syscall:
                 il.append(il.set_reg(4, 'syscall_num', il.const(4, info.imm22)))
                 il.append(il.system_call())
@@ -1063,16 +1073,16 @@ class QuarkArch(Architecture):
                         if info.a == self.ip_reg_index:
                             il.append(il.jump(cval()))
                         else:
-                            il.append(il.set_reg(4, ra(), cval()))
+                            il.append(set_reg_or_jmp(4, info.a, cval()))
                     case QuarkIntegerOpcode.xchg:
                         result = LLIL_TEMP(1)
                         il.append(il.set_reg(4, result, ra_expr()))
-                        il.append(il.set_reg(4, ra(), rc_expr()))
-                        il.append(il.set_reg(4, rc(), il.reg(4, result)))
+                        il.append(set_reg_or_jmp(4, info.a, rc_expr()))
+                        il.append(set_reg_or_jmp(4, info.c, il.reg(4, result)))
                     case QuarkIntegerOpcode.sxb:
-                        il.append(il.set_reg(4, ra(), il.sign_extend(4, il.low_part(1, rc_expr()))))
+                        il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.low_part(1, rc_expr()))))
                     case QuarkIntegerOpcode.sxh:
-                        il.append(il.set_reg(4, ra(), il.sign_extend(4, il.low_part(2, rc_expr()))))
+                        il.append(set_reg_or_jmp(4, info.a, il.sign_extend(4, il.low_part(2, rc_expr()))))
                     case QuarkIntegerOpcode.swaph:
                         il.append(il.intrinsic([ra()], '__byteswaph', [il.low_part(2, rc_expr())]))
                     case QuarkIntegerOpcode.swapw:
@@ -1082,19 +1092,19 @@ class QuarkArch(Architecture):
                         il.append(il.set_reg(4, addr, ra_expr()))
                         il.append(il.call(il.reg(4, addr)))
                     case QuarkIntegerOpcode.neg:
-                        il.append(il.set_reg(4, ra(), il.neg_expr(4, rc_expr())))
+                        il.append(set_reg_or_jmp(4, info.a, il.neg_expr(4, rc_expr())))
                     case QuarkIntegerOpcode.not_:
-                        il.append(il.set_reg(4, ra(), il.not_expr(4, rc_expr())))
+                        il.append(set_reg_or_jmp(4, info.a, il.not_expr(4, rc_expr())))
                     case QuarkIntegerOpcode.zxb:
-                        il.append(il.set_reg(4, ra(), il.zero_extend(4, il.low_part(1, rc_expr()))))
+                        il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.low_part(1, rc_expr()))))
                     case QuarkIntegerOpcode.zxh:
-                        il.append(il.set_reg(4, ra(), il.zero_extend(4, il.low_part(2, rc_expr()))))
+                        il.append(set_reg_or_jmp(4, info.a, il.zero_extend(4, il.low_part(2, rc_expr()))))
                     case QuarkIntegerOpcode.ldcr:
                         cc0 = il.flag_bit(4, 'cc0', 0)
                         cc1 = il.flag_bit(4, 'cc1', 8)
                         cc2 = il.flag_bit(4, 'cc2', 16)
                         cc3 = il.flag_bit(4, 'cc3', 24)
-                        il.append(il.set_reg(4, ra(), il.or_expr(4, cc3, il.or_expr(4, cc2, il.or_expr(4, cc1, cc0)))))
+                        il.append(set_reg_or_jmp(4, info.a, il.or_expr(4, cc3, il.or_expr(4, cc2, il.or_expr(4, cc1, cc0)))))
                     case QuarkIntegerOpcode.stcr:
                         il.append(il.set_reg(1, LLIL_TEMP(0), ra_expr()))
                         il.append(il.set_flag('cc0', il.test_bit(4, il.reg(4, LLIL_TEMP(0)), il.const(4, 0x1))))
