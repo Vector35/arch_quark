@@ -1933,7 +1933,9 @@ BinaryViewType['ELF'].register_platform(3, qarch, qlinuxplatform)
 
 # Load all the bundled Type Libraries
 for file in (Path(__file__).parent / "typelib").glob("*.bntl"):
-    TypeLibrary.load_from_file(str(file))
+    tl = TypeLibrary.load_from_file(str(file))
+    if hasattr(tl, 'register'):  # >= 5.3 need to register separately
+        tl.register()
 
 # ----------------------------------------------------------------------------------------
 # Workflow for improving signatures
