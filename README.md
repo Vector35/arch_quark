@@ -28,7 +28,7 @@ This plugin adds support for the Quark architecture to Binary Ninja. It is inten
     * [System Calls](https://binary.ninja/2026/03/04/quark-platform-part-3.html#system-calls-1)
     * [Platform Types](https://binary.ninja/2026/03/04/quark-platform-part-3.html#platform-types)
     * [Type Libraries](https://binary.ninja/2026/03/04/quark-platform-part-3.html#type-libraries)
-    * [Standard Library Signatures](https://binary.ninja/2026/03/04/quark-platform-part-3.html#standard-library-signatures)
+    * [Function Signatures](https://binary.ninja/2026/03/04/quark-platform-part-3.html#function-signatures)
     * [Other](https://binary.ninja/2026/03/04/quark-platform-part-3.html#other)
 * [Conclusion](https://binary.ninja/2026/03/04/quark-platform-part-3.html#conclusion)
 
